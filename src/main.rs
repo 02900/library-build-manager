@@ -67,7 +67,7 @@ pub fn Blog(id: i32) -> Element {
 
             // Content
             h1 { "This is blog #{id}!" }
-            p { "In blog #{id}, we show how the Dioxus router works and how URL parameters can be passed as props to our route components." }
+            p { class: "text-red-500", "In blog #{id}, we show how the Dioxus router works and how URL parameters can be passed as props to our route components." }
 
             // Navigation links
             Link {
