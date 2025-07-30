@@ -2,6 +2,34 @@ use dioxus::prelude::*;
 use crate::types::TargetPath;
 use crate::logic::*;
 
+/// Extract project name from target path
+/// For paths like "/Users/random/Documents/project/node_modules/@package/name"
+/// Returns "project"
+/// For nested node_modules like "/project/node_modules/pkg/node_modules/@nested/lib"
+/// Returns "pkg" (parent of the LAST node_modules)
+fn extract_project_name(path: &str) -> String {
+    let path_parts: Vec<&str> = path.split('/').collect();
+    
+    // Find the index of the LAST "node_modules" in the path
+    if let Some(node_modules_index) = path_parts.iter().rposition(|&part| part == "node_modules") {
+        // The project name should be the directory before the last "node_modules"
+        if node_modules_index > 0 {
+            return path_parts[node_modules_index - 1].to_string();
+        }
+    }
+    
+    // Fallback: try to get the last meaningful directory name
+    // Skip empty parts and common endings
+    for part in path_parts.iter().rev() {
+        if !part.is_empty() && *part != "node_modules" && !part.starts_with('@') {
+            return part.to_string();
+        }
+    }
+    
+    // Final fallback: return the full path
+    path.to_string()
+}
+
 /// Project Detail page
 #[component]
 pub fn ProjectDetail(id: String) -> Element {
@@ -305,7 +333,10 @@ pub fn ProjectDetail(id: String) -> Element {
                                                 }
                                                 // Path info
                                                 div { class: "flex-1",
-                                                    p { class: "font-medium text-gray-900",
+                                                    div { class: "font-medium text-gray-900",
+                                                        "{extract_project_name(&target_path.path)}"
+                                                    }
+                                                    div { class: "text-xs text-gray-500 mt-1",
                                                         "{target_path.path}"
                                                     }
                                                 }
