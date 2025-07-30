@@ -89,6 +89,20 @@ pub fn Settings() -> Element {
                                             },
                                             "Add to PATH"
                                         }
+                                    } else {
+                                        button {
+                                            class: "bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors",
+                                            onclick: move |_| {
+                                                spawn(async move {
+                                                    let result = remove_from_path().await;
+                                                    operation_result.set(Some(result.clone()));
+                                                    if result.is_ok() {
+                                                        path_status.set(check_path_status());
+                                                    }
+                                                });
+                                            },
+                                            "Remove from PATH"
+                                        }
                                     }
                                     button {
                                         class: "bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors",
@@ -106,17 +120,9 @@ pub fn Settings() -> Element {
                                         class: if result.is_ok() { "bg-green-50 border border-green-200" } else { "bg-red-50 border border-red-200" },
                                         match result {
                                             Ok(msg) => rsx! {
-                                                div { class: "flex items-center space-x-2 text-green-700",
-                                                    span { "✅" }
-                                                    span { class: "font-medium", "Success!" }
-                                                }
                                                 p { class: "text-sm text-green-600 mt-1", "{msg}" }
                                             },
                                             Err(msg) => rsx! {
-                                                div { class: "flex items-center space-x-2 text-red-700",
-                                                    span { "❌" }
-                                                    span { class: "font-medium", "Error" }
-                                                }
                                                 p { class: "text-sm text-red-600 mt-1", "{msg}" }
                                             },
                                         }
@@ -229,33 +235,16 @@ async fn add_to_path() -> Result<String, String> {
         // First try normal creation
         match std::os::unix::fs::symlink(&binary_path, target_path) {
             Ok(_) => {
-                Ok(format!(
-                    "✅ Successfully added library-build-management to PATH!\n\n📍 Symlink created: {} -> {}\n\n🔄 Next steps:\n• Restart your terminal\n• Run 'which library-build-management' to verify\n• Try 'library-build-management --help'",
-                    target_path.display(),
-                    binary_path.display()
-                ))
+                Ok("✅ Successfully added library-build-management to PATH".to_string())
             }
             Err(_e) => {
                 // Try with elevated privileges using osascript (macOS)
                 match create_symlink_with_admin(&binary_path, target_path) {
                     Ok(_) => {
-                        Ok(format!(
-                            "✅ Successfully added library-build-management to PATH with admin privileges!\n\n📍 Symlink created: {} -> {}\n\n🔄 Next steps:\n• Restart your terminal\n• Run 'which library-build-management' to verify\n• Try 'library-build-management --help'",
-                            target_path.display(),
-                            binary_path.display()
-                        ))
+                        Ok("✅ Successfully added library-build-management to PATH".to_string())
                     }
-                    Err(admin_err) => {
-                        // Provide detailed error with manual solutions
-                        let error_msg = format!(
-                            "❌ Failed to add to PATH (tried both normal and admin methods)\n\n🔧 Manual Solutions:\n\n1️⃣ Run with sudo (recommended):\n   sudo ln -sf {} /usr/local/bin/library-build-management\n\n2️⃣ Add to PATH in shell profile (~/.zshrc or ~/.bash_profile):\n   export PATH=\"$PATH:{}\"\n\n3️⃣ Create an alias:\n   alias library-build-management='{}'\n\n🔍 Debug info:\n• Binary path: {}\n• Admin error: {}",
-                            binary_path.display(),
-                            binary_path.parent().unwrap_or(Path::new(".")).display(),
-                            binary_path.display(),
-                            binary_path.display(),
-                            admin_err
-                        );
-                        Err(error_msg)
+                    Err(_admin_err) => {
+                        Err("❌ Failed to add to PATH".to_string())
                     }
                 }
             }
@@ -337,6 +326,76 @@ fn create_symlink_with_admin(source: &Path, target: &Path) -> Result<(), String>
     Err(format!(
         "Admin privileges not implemented for this platform. Please run manually:\nsudo ln -sf {} {}",
         source.display(),
+        target.display()
+    ))
+}
+
+/// Remove library-build-management from PATH
+async fn remove_from_path() -> Result<String, String> {
+    let target_path = Path::new("/usr/local/bin/library-build-management");
+    
+    // Check if symlink exists
+    if !target_path.exists() {
+        return Err("❌ CLI is not installed in PATH".to_string());
+    }
+    
+    // Try to remove the symlink
+    #[cfg(unix)]
+    {
+        // First try normal removal
+        match fs::remove_file(target_path) {
+            Ok(_) => {
+                Ok("✅ Successfully removed library-build-management from PATH".to_string())
+            }
+            Err(_e) => {
+                // Try with elevated privileges using osascript (macOS)
+                match remove_symlink_with_admin(target_path) {
+                    Ok(_) => {
+                        Ok("✅ Successfully removed library-build-management from PATH".to_string())
+                    }
+                    Err(_admin_err) => {
+                        Err("❌ Failed to remove from PATH".to_string())
+                    }
+                }
+            }
+        }
+    }
+    
+    #[cfg(not(unix))]
+    {
+        Err("PATH removal is only supported on Unix-like systems".to_string())
+    }
+}
+
+/// Remove symlink with admin privileges using macOS osascript
+#[cfg(target_os = "macos")]
+fn remove_symlink_with_admin(target: &Path) -> Result<(), String> {
+    use std::process::Command;
+    
+    let script = format!(
+        "do shell script \"rm -f '{}'\" with administrator privileges",
+        target.display()
+    );
+    
+    let output = Command::new("osascript")
+        .arg("-e")
+        .arg(&script)
+        .output()
+        .map_err(|e| format!("Failed to execute osascript: {}", e))?;
+    
+    if output.status.success() {
+        Ok(())
+    } else {
+        let error = String::from_utf8_lossy(&output.stderr);
+        Err(format!("osascript failed: {}", error))
+    }
+}
+
+/// Fallback for non-macOS Unix systems - remove symlink
+#[cfg(all(unix, not(target_os = "macos")))]
+fn remove_symlink_with_admin(target: &Path) -> Result<(), String> {
+    Err(format!(
+        "Admin privileges not implemented for this platform. Please run manually:\nsudo rm -f {}",
         target.display()
     ))
 }
