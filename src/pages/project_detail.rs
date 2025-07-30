@@ -101,7 +101,7 @@ pub fn ProjectDetail(id: String) -> Element {
                                             h3 { class: "text-lg font-medium text-gray-800 mb-3",
                                                 "Available Commands"
                                             }
-                                            div { class: "grid grid-cols-1 gap-2",
+                                            div { class: "grid grid-cols-1 gap-2 lg:max-h-[240px] overflow-y-scroll",
                                                 for cmd in commands.iter() {
                                                     div {
                                                         class: format!(
