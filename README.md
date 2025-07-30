@@ -5,7 +5,7 @@ Una aplicación de escritorio desarrollada con Dioxus 0.7 para gestionar el buil
 ## Características
 
 - ✅ **Gestión de Proyectos**: Agregar, editar y eliminar proyectos de librerías
-- ✅ **Persistencia de Datos**: Los proyectos se guardan automáticamente en `~/.update-packages/projects.json`
+- ✅ **Persistencia de Datos**: Los proyectos se guardan automáticamente en `~/.library-build-management/projects.json`
 - ✅ **Selector Nativo de Carpetas**: Integración con el sistema operativo para seleccionar directorios
 - ✅ **Análisis de package.json**: Detección automática de comandos de build disponibles
 - ✅ **Gestión de Paths de Destino**: Agregar y activar/desactivar ubicaciones donde actualizar la librería
@@ -45,7 +45,7 @@ Cuando se ejecuta "Build & Update":
 ## Estructura del Proyecto
 
 ```
-update-packages/
+library-build-management/
 ├─ assets/           # Assets estáticos (CSS, iconos)
 ├─ src/
 │  └─ main.rs       # Código principal de la aplicación
@@ -104,7 +104,7 @@ dx serve --platform desktop
 
 ## Almacenamiento de Datos
 
-Los proyectos se guardan en: `~/.update-packages/projects.json`
+Los proyectos se guardan en: `~/.library-build-management/projects.json`
 
 Estructura del archivo:
 ```json

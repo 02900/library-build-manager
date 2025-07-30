@@ -49,7 +49,7 @@ pub fn Settings() -> Element {
                                     "Add CLI to System PATH"
                                 }
                                 p { class: "text-gray-600 text-sm mb-4",
-                                    "Make the 'update-packages' command available globally from any terminal. This allows you to run builds from anywhere without specifying the full path."
+                                    "Make the 'library-build-management' command available globally from any terminal. This allows you to run builds from anywhere without specifying the full path."
                                 }
                                 
                                 // Current Status
@@ -61,7 +61,7 @@ pub fn Settings() -> Element {
                                                 span { class: "font-medium", "CLI is available in PATH" }
                                             }
                                             p { class: "text-sm text-gray-600 mt-1",
-                                                "You can run 'update-packages' from any terminal"
+                                                "You can run 'library-build-management' from any terminal"
                                             }
                                         },
                                         PathStatus::NotInPath => rsx! {
@@ -143,7 +143,7 @@ pub fn Settings() -> Element {
                                 li { "• Creates a symlink in /usr/local/bin pointing to the current binary" }
                                 li { "• /usr/local/bin is typically in the system PATH" }
                                 li { "• You may need to restart your terminal for changes to take effect" }
-                                li { "• Run 'which update-packages' to verify the installation" }
+                                li { "• Run 'which library-build-management' to verify the installation" }
                             }
                         }
                     }
@@ -158,13 +158,13 @@ pub fn Settings() -> Element {
                     div { class: "space-y-4",
                         div { class: "bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm",
                             div { "# List all projects" }
-                            div { class: "text-white", "$ update-packages list" }
+                            div { class: "text-white", "$ library-build-management list" }
                             br {}
                             div { "# Build a specific project" }
-                            div { class: "text-white", "$ update-packages build --project \"My Project\"" }
+                            div { class: "text-white", "$ library-build-management build --project \"My Project\"" }
                             br {}
                             div { "# Show help" }
-                            div { class: "text-white", "$ update-packages --help" }
+                            div { class: "text-white", "$ library-build-management --help" }
                         }
                     }
                 }
@@ -181,8 +181,8 @@ enum PathStatus {
 }
 
 fn check_path_status() -> PathStatus {
-    // Check if update-packages is available in PATH
-    match Command::new("which").arg("update-packages").output() {
+    // Check if library-build-management is available in PATH
+    match Command::new("which").arg("library-build-management").output() {
         Ok(output) => {
             if output.status.success() && !output.stdout.is_empty() {
                 PathStatus::InPath
@@ -199,7 +199,7 @@ async fn add_to_path() -> Result<String, String> {
     let current_exe = env::current_exe()
         .map_err(|e| format!("Failed to get current executable path: {}", e))?;
     
-    let target_path = Path::new("/usr/local/bin/update-packages");
+    let target_path = Path::new("/usr/local/bin/library-build-management");
     
     // Remove existing symlink if it exists
     if target_path.exists() {
@@ -220,7 +220,7 @@ async fn add_to_path() -> Result<String, String> {
     }
     
     Ok(format!(
-        "Successfully added update-packages to PATH!\nSymlink created: {} -> {}\nRestart your terminal and run 'which update-packages' to verify.",
+        "Successfully added library-build-management to PATH!\nSymlink created: {} -> {}\nRestart your terminal and run 'which library-build-management' to verify.",
         target_path.display(),
         current_exe.display()
     ))

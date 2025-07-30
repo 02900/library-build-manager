@@ -12,7 +12,7 @@ use pages::{Home, ProjectDetail, Settings};
 use logic::*;
 
 #[derive(Parser)]
-#[command(name = "update-packages")]
+#[command(name = "library-build-management")]
 #[command(about = "A tool to manage library builds and deployments")]
 struct Cli {
     #[command(subcommand)]
@@ -128,7 +128,7 @@ fn make_window() -> WindowBuilder {
     WindowBuilder::new()
         .with_resizable(true)
         .with_always_on_top(false)
-        .with_title("Update Packages")
+        .with_title("Library Build Management")
 }
 
 // CLI Functions

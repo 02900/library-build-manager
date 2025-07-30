@@ -2614,6 +2614,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "library-build-management"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "dioxus",
+ "dirs 5.0.1",
+ "rfd",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "libredox"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4978,20 +4992,6 @@ name = "untrusted"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
-
-[[package]]
-name = "update-packages"
-version = "0.1.0"
-dependencies = [
- "clap",
- "dioxus",
- "dirs 5.0.1",
- "rfd",
- "serde",
- "serde_json",
- "tokio",
- "uuid",
-]
 
 [[package]]
 name = "url"

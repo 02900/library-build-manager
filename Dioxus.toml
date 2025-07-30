@@ -3,7 +3,7 @@
 [web.app]
 
 # HTML title tag content
-title = "update-packages"
+title = "Library Build Management"
 
 # include `assets` in web platform
 [web.resource]

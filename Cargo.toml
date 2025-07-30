@@ -1,5 +1,5 @@
 [package]
-name = "update-packages"
+name = "library-build-management"
 version = "0.1.0"
 authors = ["juanpiece <juan@dd3tech.mx>"]
 edition = "2021"

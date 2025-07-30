@@ -4,7 +4,7 @@ use serde_json;
 // Data persistence functions
 pub fn get_data_dir() -> std::path::PathBuf {
     let mut path = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
-    path.push(".update-packages");
+    path.push(".library-build-management");
     if !path.exists() {
         std::fs::create_dir_all(&path).unwrap_or_else(|e| {
             eprintln!("Failed to create data directory: {}", e);
