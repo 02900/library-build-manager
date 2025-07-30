@@ -133,38 +133,102 @@ pub fn Settings() -> Element {
                         // Instructions
                         div { class: "bg-blue-50 border border-blue-200 rounded-lg p-4",
                             h4 { class: "font-medium text-blue-900 mb-2", "How it works:" }
-                            ul { class: "text-sm text-blue-800 space-y-1",
-                                li {
-                                    "• Creates a symlink in /usr/local/bin pointing to the current binary"
+                            
+                            // Platform-specific instructions
+                            {
+                                #[cfg(target_os = "windows")]
+                                {
+                                    rsx! {
+                                        ul { class: "text-sm text-blue-800 space-y-1",
+                                            li {
+                                                "• Adds the application directory to your user PATH environment variable"
+                                            }
+                                            li { "• No administrator privileges required (uses user PATH only)" }
+                                            li {
+                                                "• You may need to restart your terminal for changes to take effect"
+                                            }
+                                            li {
+                                                "• Run 'where library-build-management' to verify the installation"
+                                            }
+                                        }
+                                    }
                                 }
-                                li { "• /usr/local/bin is typically in the system PATH" }
-                                li {
-                                    "• You may need to restart your terminal for changes to take effect"
-                                }
-                                li {
-                                    "• Run 'which library-build-management' to verify the installation"
+                                
+                                #[cfg(unix)]
+                                {
+                                    rsx! {
+                                        ul { class: "text-sm text-blue-800 space-y-1",
+                                            li {
+                                                "• Creates a symlink in /usr/local/bin pointing to the current binary"
+                                            }
+                                            li { "• /usr/local/bin is typically in the system PATH" }
+                                            li {
+                                                "• May request administrator privileges if needed (via password prompt)"
+                                            }
+                                            li {
+                                                "• You may need to restart your terminal for changes to take effect"
+                                            }
+                                            li {
+                                                "• Run 'which library-build-management' to verify the installation"
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
                         // Alternative installation for permission issues
                         div { class: "bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4",
-                            h4 { class: "font-medium text-yellow-900 mb-2",
-                                "⚠️ If you get permission errors:"
-                            }
-                            div { class: "text-sm text-yellow-800 space-y-2",
-                                p { "Option 1: Run the command manually with sudo:" }
-                                div { class: "bg-gray-900 text-green-400 p-2 rounded font-mono text-xs",
-                                    "sudo ln -sf /path/to/LibraryBuildManagement.app/Contents/MacOS/library-build-management /usr/local/bin/library-build-management"
+                            {
+                                // Windows alternative instructions
+                                #[cfg(target_os = "windows")]
+                                {
+                                    rsx! {
+                                        div {
+                                            h4 { class: "font-medium text-yellow-900 mb-2",
+                                                "⚠️ If automatic installation fails:"
+                                            }
+                                            div { class: "text-sm text-yellow-800 space-y-2",
+                                                p { "Option 1: Add manually via System Properties:" }
+                                                ul { class: "list-disc list-inside ml-2 space-y-1",
+                                                    li { "Open System Properties → Advanced → Environment Variables" }
+                                                    li { "Edit your user PATH variable" }
+                                                    li { "Add the application directory to the PATH" }
+                                                }
+                                                p { class: "mt-2", "Option 2: Use PowerShell manually:" }
+                                                div { class: "bg-gray-900 text-green-400 p-2 rounded font-mono text-xs",
+                                                    "$env:PATH += ';C:\\path\\to\\your\\app'; [Environment]::SetEnvironmentVariable('PATH', $env:PATH, 'User')"
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
-                                p { class: "mt-2",
-                                    "Option 2: Add to your shell profile (~/.zshrc or ~/.bash_profile):"
-                                }
-                                div { class: "bg-gray-900 text-green-400 p-2 rounded font-mono text-xs",
-                                    "export PATH=\"$PATH:/path/to/LibraryBuildManagement.app/Contents/MacOS\""
-                                }
-                                p { class: "mt-2", "Option 3: Create an alias in your shell profile:" }
-                                div { class: "bg-gray-900 text-green-400 p-2 rounded font-mono text-xs",
-                                    "alias library-build-management='/path/to/LibraryBuildManagement.app/Contents/MacOS/library-build-management'"
+                                
+                                // Unix alternative instructions
+                                #[cfg(unix)]
+                                {
+                                    rsx! {
+                                        div {
+                                            h4 { class: "font-medium text-yellow-900 mb-2",
+                                                "⚠️ If you get permission errors:"
+                                            }
+                                            div { class: "text-sm text-yellow-800 space-y-2",
+                                                p { "Option 1: Run the command manually with sudo:" }
+                                                div { class: "bg-gray-900 text-green-400 p-2 rounded font-mono text-xs",
+                                                    "sudo ln -sf /path/to/LibraryBuildManagement.app/Contents/MacOS/library-build-management /usr/local/bin/library-build-management"
+                                                }
+                                                p { class: "mt-2",
+                                                    "Option 2: Add to your shell profile (~/.zshrc or ~/.bash_profile):"
+                                                }
+                                                div { class: "bg-gray-900 text-green-400 p-2 rounded font-mono text-xs",
+                                                    "export PATH=\"$PATH:/path/to/LibraryBuildManagement.app/Contents/MacOS\""
+                                                }
+                                                p { class: "mt-2", "Option 3: Create an alias in your shell profile:" }
+                                                div { class: "bg-gray-900 text-green-400 p-2 rounded font-mono text-xs",
+                                                    "alias library-build-management='/path/to/LibraryBuildManagement.app/Contents/MacOS/library-build-management'"
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -201,33 +265,55 @@ enum PathStatus {
 }
 
 fn check_path_status() -> PathStatus {
-    let target_path = Path::new("/usr/local/bin/library-build-management");
+    #[cfg(target_os = "windows")]
+    {
+        check_path_status_windows()
+    }
     
-    // First check if the symlink exists
-    if target_path.exists() {
-        // Double-check with 'which' command
-        match Command::new("which").arg("library-build-management").output() {
-            Ok(output) => {
-                if output.status.success() && !output.stdout.is_empty() {
-                    PathStatus::InPath
-                } else {
-                    // Symlink exists but 'which' doesn't find it - might be a PATH issue
-                    // Still consider it as installed since the symlink is there
+    #[cfg(unix)]
+    {
+        let target_path = Path::new("/usr/local/bin/library-build-management");
+        
+        // First check if the symlink exists
+        if target_path.exists() {
+            // Double-check with 'which' command
+            match Command::new("which").arg("library-build-management").output() {
+                Ok(output) => {
+                    if output.status.success() && !output.stdout.is_empty() {
+                        PathStatus::InPath
+                    } else {
+                        // Symlink exists but 'which' doesn't find it - might be a PATH issue
+                        // Still consider it as installed since the symlink is there
+                        PathStatus::InPath
+                    }
+                }
+                Err(_) => {
+                    // 'which' command failed, but symlink exists, so consider it installed
                     PathStatus::InPath
                 }
             }
-            Err(_) => {
-                // 'which' command failed, but symlink exists, so consider it installed
-                PathStatus::InPath
-            }
+        } else {
+            // No symlink exists
+            PathStatus::NotInPath
         }
-    } else {
-        // No symlink exists
-        PathStatus::NotInPath
     }
 }
 
 async fn add_to_path() -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    {
+        add_to_path_windows().await
+    }
+    
+    #[cfg(unix)]
+    {
+        add_to_path_unix().await
+    }
+}
+
+/// Add to PATH on Unix systems (macOS, Linux)
+#[cfg(unix)]
+async fn add_to_path_unix() -> Result<String, String> {
     // Get the current executable path
     let current_exe = env::current_exe()
         .map_err(|e| format!("Failed to get current executable path: {}", e))?;
@@ -257,30 +343,16 @@ async fn add_to_path() -> Result<String, String> {
     }
     
     // Try to create symlink with elevated privileges if needed
-    #[cfg(unix)]
-    {
-        // First try normal creation
-        match std::os::unix::fs::symlink(&binary_path, target_path) {
-            Ok(_) => {
-                Ok("✅ Successfully added library-build-management to PATH".to_string())
-            }
-            Err(_e) => {
-                // Try with elevated privileges using osascript (macOS)
-                match create_symlink_with_admin(&binary_path, target_path) {
-                    Ok(_) => {
-                        Ok("✅ Successfully added library-build-management to PATH".to_string())
-                    }
-                    Err(_admin_err) => {
-                        Err("❌ Failed to add to PATH".to_string())
-                    }
+    match std::os::unix::fs::symlink(&binary_path, target_path) {
+        Ok(_) => Ok("✅ Successfully added library-build-management to PATH".to_string()),
+        Err(_e) => {
+            match create_symlink_with_admin(&binary_path, target_path) {
+                Ok(_) => Ok("✅ Successfully added library-build-management to PATH".to_string()),
+                Err(_admin_err) => {
+                    Err("❌ Failed to add to PATH".to_string())
                 }
             }
         }
-    }
-    
-    #[cfg(not(unix))]
-    {
-        Err("PATH installation is only supported on Unix-like systems".to_string())
     }
 }
 
@@ -359,6 +431,20 @@ fn create_symlink_with_admin(source: &Path, target: &Path) -> Result<(), String>
 
 /// Remove library-build-management from PATH
 async fn remove_from_path() -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    {
+        remove_from_path_windows().await
+    }
+    
+    #[cfg(unix)]
+    {
+        remove_from_path_unix().await
+    }
+}
+
+/// Remove from PATH on Unix systems (macOS, Linux)
+#[cfg(unix)]
+async fn remove_from_path_unix() -> Result<String, String> {
     let target_path = Path::new("/usr/local/bin/library-build-management");
     
     // Check if symlink exists
@@ -367,30 +453,22 @@ async fn remove_from_path() -> Result<String, String> {
     }
     
     // Try to remove the symlink
-    #[cfg(unix)]
-    {
-        // First try normal removal
-        match fs::remove_file(target_path) {
-            Ok(_) => {
-                Ok("✅ Successfully removed library-build-management from PATH".to_string())
-            }
-            Err(_e) => {
-                // Try with elevated privileges using osascript (macOS)
-                match remove_symlink_with_admin(target_path) {
-                    Ok(_) => {
-                        Ok("✅ Successfully removed library-build-management from PATH".to_string())
-                    }
-                    Err(_admin_err) => {
-                        Err("❌ Failed to remove from PATH".to_string())
-                    }
+    // First try normal removal
+    match fs::remove_file(target_path) {
+        Ok(_) => {
+            Ok("✅ Successfully removed library-build-management from PATH".to_string())
+        }
+        Err(_e) => {
+            // Try with elevated privileges using osascript (macOS)
+            match remove_symlink_with_admin(target_path) {
+                Ok(_) => {
+                    Ok("✅ Successfully removed library-build-management from PATH".to_string())
+                }
+                Err(_admin_err) => {
+                    Err("❌ Failed to remove from PATH".to_string())
                 }
             }
         }
-    }
-    
-    #[cfg(not(unix))]
-    {
-        Err("PATH removal is only supported on Unix-like systems".to_string())
     }
 }
 
@@ -425,4 +503,143 @@ fn remove_symlink_with_admin(target: &Path) -> Result<(), String> {
         "Admin privileges not implemented for this platform. Please run manually:\nsudo rm -f {}",
         target.display()
     ))
+}
+
+// Windows-specific PATH management functions
+
+/// Add to PATH on Windows (user PATH, no admin required)
+#[cfg(target_os = "windows")]
+async fn add_to_path_windows() -> Result<String, String> {
+    use std::process::Command;
+    
+    let current_exe = env::current_exe()
+        .map_err(|e| format!("Failed to get current executable path: {}", e))?;
+    
+    let exe_dir = current_exe.parent()
+        .ok_or("Failed to get executable directory")?;
+    
+    // First, check if already in PATH
+    if is_in_path_windows(&exe_dir.display().to_string()) {
+        return Ok("✅ Already in PATH".to_string());
+    }
+    
+    // Add to user PATH using PowerShell
+    let script = format!(
+        "$currentPath = [Environment]::GetEnvironmentVariable('PATH', 'User'); \
+         if ($currentPath -notlike '*{}*') {{ \
+             $newPath = $currentPath + ';{}'; \
+             [Environment]::SetEnvironmentVariable('PATH', $newPath, 'User'); \
+             Write-Output 'SUCCESS' \
+         }} else {{ \
+             Write-Output 'ALREADY_EXISTS' \
+         }}",
+        exe_dir.display(),
+        exe_dir.display()
+    );
+    
+    let output = Command::new("powershell")
+        .args(&["-NoProfile", "-Command", &script])
+        .output()
+        .map_err(|e| format!("Failed to execute PowerShell: {}", e))?;
+    
+    if output.status.success() {
+        let result = String::from_utf8_lossy(&output.stdout).trim();
+        match result {
+            "SUCCESS" => Ok("✅ Successfully added library-build-management to PATH".to_string()),
+            "ALREADY_EXISTS" => Ok("✅ Already in PATH".to_string()),
+            _ => Ok("✅ Successfully added library-build-management to PATH".to_string()),
+        }
+    } else {
+        let error = String::from_utf8_lossy(&output.stderr);
+        Err(format!("❌ Failed to add to PATH: {}", error))
+    }
+}
+
+/// Remove from PATH on Windows
+#[cfg(target_os = "windows")]
+async fn remove_from_path_windows() -> Result<String, String> {
+    use std::process::Command;
+    
+    let current_exe = env::current_exe()
+        .map_err(|e| format!("Failed to get current executable path: {}", e))?;
+    
+    let exe_dir = current_exe.parent()
+        .ok_or("Failed to get executable directory")?;
+    
+    // Check if it's in PATH
+    if !is_in_path_windows(&exe_dir.display().to_string()) {
+        return Err("❌ CLI is not in PATH".to_string());
+    }
+    
+    // Remove from user PATH using PowerShell
+    let exe_dir_str = exe_dir.display().to_string();
+    let escaped_dir = exe_dir_str.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]");
+    let script = format!(
+        "$currentPath = [Environment]::GetEnvironmentVariable('PATH', 'User'); \
+         $newPath = $currentPath -replace '(^|;){}(;|$)', '$1$2' -replace '^;|;$', ''; \
+         [Environment]::SetEnvironmentVariable('PATH', $newPath, 'User'); \
+         Write-Output 'SUCCESS'",
+        escaped_dir
+    );
+    
+    let output = Command::new("powershell")
+        .args(&["-NoProfile", "-Command", &script])
+        .output()
+        .map_err(|e| format!("Failed to execute PowerShell: {}", e))?;
+    
+    if output.status.success() {
+        Ok("✅ Successfully removed library-build-management from PATH".to_string())
+    } else {
+        let error = String::from_utf8_lossy(&output.stderr);
+        Err(format!("❌ Failed to remove from PATH: {}", error))
+    }
+}
+
+/// Check if a directory is in Windows PATH
+#[cfg(target_os = "windows")]
+fn is_in_path_windows(dir: &str) -> bool {
+    use std::process::Command;
+    
+    // Check both user and system PATH
+    let check_user = Command::new("powershell")
+        .args(&[
+            "-NoProfile", "-Command", 
+            &format!("[Environment]::GetEnvironmentVariable('PATH', 'User') -like '*{}*'", dir)
+        ])
+        .output();
+    
+    let check_system = Command::new("powershell")
+        .args(&[
+            "-NoProfile", "-Command", 
+            &format!("[Environment]::GetEnvironmentVariable('PATH', 'Machine') -like '*{}*'", dir)
+        ])
+        .output();
+    
+    let user_has_it = check_user
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim() == "True")
+        .unwrap_or(false);
+    
+    let system_has_it = check_system
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim() == "True")
+        .unwrap_or(false);
+    
+    user_has_it || system_has_it
+}
+
+/// Check PATH status on Windows
+#[cfg(target_os = "windows")]
+fn check_path_status_windows() -> PathStatus {
+    use std::process::Command;
+    
+    // Use 'where' command to check if the executable is found
+    match Command::new("where").arg("library-build-management.exe").output() {
+        Ok(output) => {
+            if output.status.success() && !output.stdout.is_empty() {
+                PathStatus::InPath
+            } else {
+                PathStatus::NotInPath
+            }
+        }
+        Err(_) => PathStatus::NotInPath
+    }
 }

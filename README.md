@@ -1,183 +1,203 @@
 # Library Build Management App
 
-Una aplicación de escritorio desarrollada con Dioxus 0.7 para gestionar el build y testing de librerías en desarrollo local.
+A **cross-platform** desktop application built with Dioxus 0.7 for managing build and testing of local development libraries.
 
-## Características
+## 🌟 Features
 
-### 🖥️ **Interfaz Desktop**
-- ✅ **Gestión de Proyectos**: Agregar, editar y eliminar proyectos de librerías
-- ✅ **Persistencia de Datos**: Los proyectos se guardan automáticamente en `~/.library-build-management/projects.json`
-- ✅ **Selector Nativo de Carpetas**: Integración con el sistema operativo para seleccionar directorios
-- ✅ **Análisis de package.json**: Detección automática de comandos de build disponibles
-- ✅ **Multi-selección de Comandos**: Accordion UI para seleccionar múltiples comandos con orden personalizado
-- ✅ **Gestión de Paths de Destino**: Agregar y activar/desactivar ubicaciones con checkboxes intuitivos
-- ✅ **Automatización de Build**: Incremento automático de versión patch y copia de archivos
-- ✅ **Interfaz Moderna**: UI responsive con Tailwind CSS y componentes modulares
-- ✅ **Página de Settings**: Configuración del sistema y integración CLI
+### 🖥️ **Cross-Platform Desktop Interface**
+- ✅ **Project Management**: Add, edit and delete library projects
+- ✅ **Data Persistence**: Projects are automatically saved to `~/.library-build-management/projects.json`
+- ✅ **Native Folder Picker**: OS integration for directory selection
+- ✅ **package.json Analysis**: Automatic detection of available build commands
+- ✅ **Multi-Command Selection**: Accordion UI for selecting multiple commands with custom ordering
+- ✅ **Target Path Management**: Add and activate/deactivate locations with intuitive checkboxes
+- ✅ **Build Automation**: Automatic patch version increment and file copying
+- ✅ **Modern Interface**: Responsive UI with Tailwind CSS and modular components
+- ✅ **Settings Page**: System configuration and cross-platform CLI integration
 
-### ⌨️ **CLI (Command Line Interface)**
-- ✅ **Comando Global**: Disponible desde cualquier terminal una vez instalado en PATH
-- ✅ **Lista de Proyectos**: `library-build-management list`
-- ✅ **Build Automático**: `library-build-management build --project "Nombre"`
-- ✅ **Búsqueda Flexible**: Por nombre o ID de proyecto
-- ✅ **Validación Robusta**: Verifica comandos y targets antes de ejecutar
-- ✅ **Integración PATH**: Instalación automática desde la GUI
+### ⌨️ **Cross-Platform CLI (Command Line Interface)**
+- ✅ **Global Command**: Available from any terminal once installed in PATH
+- ✅ **Project Listing**: `library-build-management list`
+- ✅ **Automatic Build**: `library-build-management build --project "Name"`
+- ✅ **Flexible Search**: By project name or ID
+- ✅ **Robust Validation**: Verifies commands and targets before execution
+- ✅ **Automatic PATH Integration**: Platform-specific installation from GUI
 
-## Funcionalidades Principales
+### 🌍 **Cross-Platform Support**
+- ✅ **Windows**: User PATH (no admin permissions required)
+- ✅ **macOS**: Symlinks with automatic admin permission requests
+- ✅ **Linux**: Standard Unix symlinks with appropriate fallbacks
+- ✅ **Smart UI**: Platform-specific instructions
+- ✅ **Native Commands**: `where` on Windows, `which` on Unix
 
-### 1. Menú Principal
-- Lista de proyectos existentes con información resumida
-- Estado vacío cuando no hay proyectos
-- Botón para agregar nuevos proyectos
-- Cada tarjeta de proyecto muestra:
-  - Nombre y ruta del proyecto
-  - Número de paths configurados
-  - Comando de build seleccionado
-  - Número de paths activos
+## Main Functionalities
 
-### 2. Vista de Detalle del Proyecto
-- **Comandos de Build**: 
-  - Accordion UI para seleccionar múltiples comandos
-  - Ordenamiento personalizado con botones up/down
-  - Badges que muestran el número de comandos seleccionados
-  - Persistencia del orden y selección
-- **Paths de Destino**: 
-  - Gestión de ubicaciones donde actualizar la librería
-  - Checkboxes para activar/desactivar paths
-  - Muestra nombre del proyecto extraído de la ruta
-  - Ruta completa visible como subtítulo
-- **Acciones**:
-  - **Build & Update**: Ejecuta múltiples comandos en orden y actualiza targets
-  - **Refresh Commands**: Actualiza la lista de comandos desde package.json
+### 1. Main Menu
+- List of existing projects with summary information
+- Empty state when no projects exist
+- Button to add new projects
+- Each project card shows:
+  - Project name and path
+  - Number of configured paths
+  - Selected build command
+  - Number of active paths
 
-### 3. Página de Settings
-- **Integración CLI**: 
-  - Verificación automática del estado del PATH
-  - Instalación con un clic del comando global
-  - Ejemplos de uso del CLI
-  - Instrucciones detalladas de configuración
-- **Estados Visuales**: 
-  - ✅ Verde: CLI disponible en PATH
-  - ⚠️ Amarillo: CLI no está en PATH
-  - ❌ Rojo: Error en la verificación
+### 2. Project Detail View
+- **Build Commands**: 
+  - Accordion UI for selecting multiple commands
+  - Custom ordering with up/down buttons
+  - Badges showing number of selected commands
+  - Persistence of order and selection
+- **Target Paths**: 
+  - Management of locations where to update the library
+  - Checkboxes to activate/deactivate paths
+  - Shows project name extracted from path
+  - Full path visible as subtitle
+- **Actions**:
+  - **Build & Update**: Execute multiple commands in order and update targets
+  - **Refresh Commands**: Update command list from package.json
 
-### 4. Lógica de Actualización (basada en update-pkg.sh)
-Cuando se ejecuta "Build & Update":
-1. Verifica que exista el directorio `dist` en el proyecto
-2. Para cada path de destino activo:
-   - Obtiene la versión actual del package.json del destino
-   - Incrementa la versión patch (ej: 1.0.0 → 1.0.1)
-   - Copia el directorio `dist` del proyecto al destino
-   - Copia el `package.json` del proyecto al destino
-   - Actualiza la versión en el package.json del destino
-3. Muestra un resumen de resultados con éxitos y errores
+### 3. Settings Page
+- **CLI Integration**: 
+  - Automatic PATH status verification
+  - One-click global command installation
+  - CLI usage examples
+  - Detailed configuration instructions
+- **Visual States**: 
+  - ✅ Green: CLI available in PATH
+  - ⚠️ Yellow: CLI not in PATH
+  - ❌ Red: Verification error
 
-## Estructura del Proyecto
+### 4. Update Logic (based on update-pkg.sh)
+When "Build & Update" is executed:
+1. Verifies that `dist` directory exists in the project
+2. For each active target path:
+   - Gets current version from target's package.json
+   - Increments patch version (e.g., 1.0.0 → 1.0.1)
+   - Copies project's `dist` directory to target
+   - Copies project's `package.json` to target
+   - Updates version in target's package.json
+3. Shows results summary with successes and errors
+
+## Project Structure
 
 ```
 library-build-management/
-├─ assets/           # Assets estáticos (CSS, iconos, favicon)
+├─ assets/           # Static assets (CSS, icons, favicon)
 │  ├─ favicon.ico
 │  ├─ main.css
 │  └─ tailwind.css
 ├─ src/
-│  ├─ main.rs        # Punto de entrada, CLI parsing, y configuración
-│  ├─ types.rs       # Definiciones de tipos (Project, TargetPath)
-│  ├─ logic.rs       # Lógica de negocio y persistencia
-│  ├─ pages/         # Páginas de la aplicación
+│  ├─ main.rs        # Entry point, CLI parsing, and configuration
+│  ├─ types.rs       # Type definitions (Project, TargetPath)
+│  ├─ logic.rs       # Business logic and persistence
+│  ├─ pages/         # Application pages
 │  │  ├─ mod.rs
-│  │  ├─ home.rs     # Página principal con lista de proyectos
-│  │  ├─ project_detail.rs  # Vista detalle del proyecto
-│  │  └─ settings.rs # Página de configuración y CLI integration
-│  └─ components/    # Componentes reutilizables
+│  │  ├─ home.rs     # Main page with project list
+│  │  ├─ project_detail.rs  # Project detail view
+│  │  └─ settings.rs # Configuration page and CLI integration
+│  └─ components/    # Reusable components
 │     ├─ mod.rs
-│     └─ project_card.rs  # Tarjeta de proyecto para la lista
-├─ Cargo.toml       # Dependencias y configuración del paquete
-├─ Dioxus.toml      # Configuración específica de Dioxus
-├─ package-lock.json # Lock file para dependencias de Node.js
-└─ README.md        # Este archivo
+│     └─ project_card.rs  # Project card for the list
+├─ Cargo.toml       # Dependencies and package configuration
+├─ Dioxus.toml      # Dioxus-specific configuration
+└─ README.md        # This file
 ```
 
-## Dependencias Principales
+## Prerequisites
 
-- **dioxus**: Framework de UI reactivo para Rust (v0.7.0-alpha.3)
-- **serde**: Serialización/deserialización de datos JSON
-- **uuid**: Generación de IDs únicos para proyectos y targets
-- **dirs**: Acceso a directorios del sistema (home, etc.)
-- **rfd**: Diálogos nativos de archivos y carpetas
-- **tokio**: Runtime asíncrono para operaciones I/O
-- **clap**: Parser de argumentos CLI con derive macros
-
-## Instalación y Uso
-
-### Prerrequisitos
 - Rust 1.70+
 - Dioxus CLI: `cargo install dioxus-cli`
 
-### Compilar y Ejecutar
+### 🔧 Installation
+
+### Compile from source code
 
 ```bash
-# Modo desarrollo con GUI
-cargo run
+# Clone the repository
+git clone https://github.com/your-user/library-build-management.git
+cd library-build-management
 
-# Modo release (recomendado para uso)
-cargo run --release
-
-# O usando Dioxus CLI para desarrollo
-dx serve --platform desktop
-
-# Compilar binario optimizado
+# Compile in release mode
 cargo build --release
+
+# Run the application
+./target/release/library-build-management
 ```
 
-## 🚀 Uso del CLI
+### 🌍 Install CLI Globally (Cross-Platform)
 
-### Instalación Global
+#### **Automatic Method** (Recommended for all platforms):
+1. Run the application
+2. Go to Settings (⚙️)
+3. Click "Add to PATH"
+4. **Windows**: Added to user PATH automatically
+5. **macOS/Linux**: Administrator permissions requested if needed
+6. Restart your terminal
 
-1. **Desde la GUI** (Recomendado):
-   - Abre la aplicación
-   - Ve a Settings (⚙️)
-   - Haz clic en "Add to PATH"
-   - Reinicia tu terminal
+#### **Manual Methods by Platform**:
 
-2. **Manual**:
-   ```bash
-   # Crear symlink manualmente
-   sudo ln -sf $(pwd)/target/release/library-build-management /usr/local/bin/library-build-management
-   ```
+**🪟 Windows:**
+```powershell
+# Option 1: PowerShell (add to user PATH)
+$env:PATH += ';C:\path\to\your\app'; [Environment]::SetEnvironmentVariable('PATH', $env:PATH, 'User')
 
-### Comandos Disponibles
+# Option 2: Via System Properties
+# System Properties → Advanced → Environment Variables → Edit user PATH
+```
+
+**🍎 macOS:**
+```bash
+# Create symlink with admin permissions
+sudo ln -sf /path/to/LibraryBuildManagement.app/Contents/MacOS/library-build-management /usr/local/bin/library-build-management
+
+# Or add to shell profile
+echo 'export PATH="$PATH:/path/to/LibraryBuildManagement.app/Contents/MacOS"' >> ~/.zshrc
+```
+
+**🐧 Linux:**
+```bash
+# Create symlink
+sudo ln -sf $(pwd)/target/release/library-build-management /usr/local/bin/library-build-management
+
+# Or add to shell profile
+echo 'export PATH="$PATH:$(pwd)/target/release"' >> ~/.bashrc
+```
+
+### Available Commands
 
 ```bash
-# Mostrar ayuda
+# Show help
 library-build-management --help
 
-# Listar todos los proyectos
+# List all projects
 library-build-management list
 
-# Ejecutar build de un proyecto específico
-library-build-management build --project "Nombre del Proyecto"
+# Execute build for a specific project
+library-build-management build --project "Project Name"
 
-# También funciona con ID del proyecto
-library-build-management build --project "uuid-del-proyecto"
-
-# Mostrar proyectos disponibles
-library-build-management build --list
+# Build by project ID
+library-build-management build --project "uuid-of-project"
 ```
 
-### Ejemplos de Uso CLI
+### CLI Usage Examples
 
 ```bash
-# Ver todos los proyectos configurados
+# List projects
 $ library-build-management list
-Available projects:
-------------------------------------------------------------
+📋 Found 2 projects:
+
+📦 Wiggot Components (a1b2c3d4-e5f6-7890-abcd-ef1234567890)
+   Path: /Users/juan/Documents/wiggot-components
+   Build commands: ["build", "build:prod"]
+   Active targets: 2
+
 📦 Builder Blocks (317eca26-6da9-4356-b1dd-55ad2d8cbb5f)
    Path: /Users/juan/Documents/wiggot-mini-sites-builder-blocks
    Build commands: ["build", "generate-exports"]
    Active targets: 1
 
-# Ejecutar build y actualizar targets
+# Execute build and update targets
 $ library-build-management build --project "Builder Blocks"
 🔨 Building project: Builder Blocks
 📁 Path: /Users/juan/Documents/wiggot-mini-sites-builder-blocks
@@ -189,90 +209,90 @@ $ library-build-management build --project "Builder Blocks"
 ✅ Build and update completed successfully!
 ```
 
-## 🖥️ Uso de la GUI
+## 🖥️ GUI Usage
 
-### 1. **Configuración Inicial**
+### 1. **Initial Setup**
 
-**Agregar un Proyecto**:
-- Haz clic en "+ Add Project" en la página principal
-- Ingresa el nombre del proyecto
-- Selecciona la ruta usando "Browse" o escríbela manualmente
-- La aplicación detectará automáticamente los comandos de build disponibles
+**Add a Project**:
+- Click "+ Add Project" on the main page
+- Enter the project name
+- Select the path using "Browse" or type it manually
+- The application will automatically detect available build commands
 
-**Configurar CLI Global** (Opcional pero recomendado):
-- Ve a Settings (⚙️) desde la página principal
-- En "CLI Integration", haz clic en "Add to PATH"
-- Reinicia tu terminal para usar comandos globales
+**Configure Global CLI** (Optional but recommended):
+- Go to Settings (⚙️) from the main page
+- In "CLI Integration", click "Add to PATH"
+- Restart your terminal to use global commands
 
-### 2. **Configuración del Proyecto**
+### 2. **Project Configuration**
 
-**Seleccionar Comandos de Build**:
-- Entra al detalle del proyecto haciendo clic en su tarjeta
-- En "Build Commands", usa el accordion para:
-  - ✅ Seleccionar múltiples comandos
-  - 🔄 Ordenar comandos con botones up/down
-  - 👀 Ver badges con el número de comandos seleccionados
+**Select Build Commands**:
+- Enter project details by clicking on its card
+- In "Build Commands", use the accordion to:
+  - ✅ Select multiple commands
+  - 🔄 Order commands with up/down buttons
+  - 👀 See badges with number of selected commands
 
-**Gestionar Paths de Destino**:
-- En "Target Paths", haz clic en "+ Add Path"
-- Selecciona la carpeta de destino usando el selector nativo
-- Usa checkboxes ☑️ para activar/desactivar paths
-- Visualiza el nombre del proyecto extraído automáticamente
-- La ruta completa aparece como subtítulo
+**Manage Target Paths**:
+- In "Target Paths", click "+ Add Path"
+- Select the target folder using the native picker
+- Use checkboxes ☑️ to activate/deactivate paths
+- View automatically extracted project name
+- Full path appears as subtitle
 
-### 3. **Ejecutar Builds**
+### 3. **Execute Builds**
 
-**Desde la GUI**:
-- Asegúrate de tener comandos seleccionados y paths activos
-- Haz clic en "Build & Update"
-- Los comandos se ejecutan en el orden configurado
-- Revisa los resultados detallados en el modal
+**From the GUI**:
+- Make sure you have selected commands and active paths
+- Click "Build & Update"
+- Commands execute in configured order
+- Review detailed results in the modal
 
-**Desde el CLI** (si está configurado):
+**From the CLI** (if configured):
 ```bash
-# Listar proyectos
+# List projects
 library-build-management list
 
-# Ejecutar build específico
-library-build-management build --project "Nombre del Proyecto"
+# Execute specific build
+library-build-management build --project "Project Name"
 ```
 
-### 4. **Flujos de Trabajo Recomendados**
+### 4. **Recommended Workflows**
 
-**Setup Inicial** (Una sola vez):
-1. Configurar proyectos en la GUI
-2. Seleccionar comandos de build múltiples
-3. Agregar y activar target paths
-4. Instalar CLI en PATH desde Settings
+**Initial Setup** (One time):
+1. Configure projects in the GUI
+2. Select multiple build commands
+3. Add and activate target paths
+4. Install CLI in PATH from Settings
 
-**Uso Diario**:
-- **Desarrollo**: Usar CLI para builds rápidos
-- **Configuración**: Usar GUI para cambios y nuevos proyectos
-- **Monitoreo**: GUI para ver estado y resultados detallados
+**Daily Usage**:
+- **Development**: Use CLI for quick builds
+- **Configuration**: Use GUI for changes and new projects
+- **Monitoring**: GUI for status and detailed results
 
-## 💾 Almacenamiento de Datos
+## 💾 Data Storage
 
-Los proyectos se guardan automáticamente en: `~/.library-build-management/projects.json`
+Projects are automatically saved to: `~/.library-build-management/projects.json`
 
-**Características del almacenamiento**:
-- ✅ **Persistencia automática**: Cambios se guardan inmediatamente
-- ✅ **Backup seguro**: Validación JSON antes de escribir
-- ✅ **Migración transparente**: Compatibilidad con versiones anteriores
-- ✅ **Ubicación estándar**: Directorio home del usuario
+**Storage features**:
+- ✅ **Automatic persistence**: Changes saved immediately
+- ✅ **Safe backup**: JSON validation before writing
+- ✅ **Transparent migration**: Compatibility with previous versions
+- ✅ **Standard location**: User's home directory
 
-Estructura del archivo:
+File structure:
 ```json
 [
   {
-    "id": "uuid-único",
-    "name": "Nombre del Proyecto",
-    "path": "/ruta/al/proyecto",
+    "id": "unique-uuid",
+    "name": "Project Name",
+    "path": "/path/to/project",
     "build_commands": ["build", "dev", "test"],
     "selected_build_command": "build",
     "target_paths": [
       {
-        "id": "uuid-único",
-        "path": "/ruta/destino",
+        "id": "unique-uuid",
+        "path": "/target/path",
         "is_active": true
       }
     ]
@@ -280,23 +300,74 @@ Estructura del archivo:
 ]
 ```
 
-## Desarrollo
+## 🛠️ Development
 
-### Arquitectura
-- **Dioxus 0.7**: Framework de UI con componentes reactivos
-- **Signals**: Manejo de estado local con `use_signal`
-- **Router**: Navegación entre vistas (Home, ProjectDetail)
-- **Async**: Operaciones asíncronas para diálogos de archivos
+### Compile and Run
 
-### Componentes Principales
-- `App`: Componente raíz con router
-- `Home`: Vista principal con lista de proyectos
-- `ProjectDetail`: Vista de detalle y configuración
-- `ProjectCard`: Tarjeta individual de proyecto
+```bash
+# Development mode with GUI
+cargo run
 
-### Funciones Utilitarias
-- `load_projects()` / `save_projects()`: Persistencia
-- `parse_package_json()`: Análisis de comandos
-- `build_and_update_project()`: Lógica principal de actualización
-- `open_folder_dialog()`: Selector nativo de carpetas
+# Release mode (recommended for usage)
+cargo run --release
 
+# Or using Dioxus CLI for development
+dx serve --platform desktop
+
+# Compile optimized binary
+cargo build --release
+
+# Create bundle for distribution (macOS)
+dx bundle
+```
+
+### 🏗️ Cross-Platform Architecture
+- **Dioxus 0.7**: UI framework with reactive components
+- **Signals**: Local state management with `use_signal`
+- **Router**: Navigation between views (Home, ProjectDetail, Settings)
+- **Async**: Asynchronous operations for file dialogs
+- **Conditional Compilation**: `#[cfg(target_os = "...")]` for platform-specific functionality
+- **PATH Management**: Native implementations for Windows, macOS and Linux
+
+### 📦 Key Dependencies
+- `dioxus`: Main UI framework
+- `dioxus-router`: Page navigation
+- `serde` / `serde_json`: Data serialization
+- `uuid`: Unique ID generation
+- `dirs`: System directory access
+- `rfd`: Native file dialogs
+- `tokio`: Asynchronous runtime
+- `clap`: CLI argument parsing
+
+### 🧩 Main Components
+- `App`: Root component with router
+- `Home`: Main view with project list
+- `ProjectDetail`: Detail and configuration view
+- `Settings`: Configuration page and CLI integration
+- `ProjectCard`: Individual project card
+
+### 🔧 Utility Functions
+- `load_projects()` / `save_projects()`: Cross-platform persistence
+- `parse_package_json()`: Build command analysis
+- `build_and_update_project()`: Main update logic
+- `open_folder_dialog()`: Native folder picker
+- `add_to_path()` / `remove_from_path()`: Platform-specific PATH management
+- `check_path_status()`: CLI status verification
+
+### 🌍 Platform-Specific Functionality
+
+**Windows:**
+- User PATH management with PowerShell
+- Verification with `where` command
+- No administrator permissions required
+
+**macOS:**
+- Symlinks in `/usr/local/bin`
+- Automatic permission requests with `osascript`
+- `.app` bundle detection
+- Verification with `which` command
+
+**Linux:**
+- Standard Unix symlinks
+- Fallbacks with `sudo` instructions
+- Verification with `which` command
