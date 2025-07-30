@@ -16,6 +16,7 @@ pub fn ProjectDetail(id: String) -> Element {
             let mut show_result_modal = use_signal(|| false);
             let mut result_message = use_signal(|| String::new());
             let mut is_success = use_signal(|| true);
+            let mut show_commands_accordion = use_signal(|| false);
             
             let commands = parse_package_json(&current_project().path);
 
@@ -38,47 +39,170 @@ pub fn ProjectDetail(id: String) -> Element {
                     div { class: "max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8",
                         // Build Commands Section
                         div { class: "bg-white rounded-lg shadow-md p-6",
-                            h2 { class: "text-xl font-semibold text-gray-900 mb-4", "Build Commands" }
+                            // Accordion Header
+                            div { 
+                                class: "flex items-center justify-between cursor-pointer p-2 hover:bg-gray-50 rounded-lg",
+                                onclick: move |_| show_commands_accordion.set(!show_commands_accordion()),
+                                div { class: "flex items-center space-x-3",
+                                    h2 { class: "text-xl font-semibold text-gray-900", "Build Commands" }
+                                    if !current_project().selected_build_commands.is_empty() {
+                                        span { 
+                                            class: "bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full",
+                                            "{current_project().selected_build_commands.len()} selected"
+                                        }
+                                    }
+                                }
+                                div { class: "text-gray-500",
+                                    if show_commands_accordion() {
+                                        "▼"
+                                    } else {
+                                        "▶"
+                                    }
+                                }
+                            }
                             
-                            if !commands.is_empty() {
-                                div { class: "space-y-3",
-                                    for cmd in commands.iter() {
-                                        div { 
-                                            class: format!("p-3 border rounded-lg cursor-pointer transition-colors {}",
-                                                if current_project().selected_build_command.as_ref() == Some(cmd) {
-                                                    "border-blue-500 bg-blue-50"
-                                                } else {
-                                                    "border-gray-200 hover:border-gray-300"
-                                                }
-                                            ),
-                                            onclick: {
-                                                let cmd = cmd.clone();
-                                                move |_| {
-                                                    let mut proj = current_project();
-                                                    proj.selected_build_command = Some(cmd.clone());
-                                                    current_project.set(proj.clone());
-                                                    
-                                                    let mut all_projects = load_projects();
-                                                    if let Some(p) = all_projects.iter_mut().find(|p| p.id == proj.id) {
-                                                        p.selected_build_command = Some(cmd.clone());
+                            // Accordion Content
+                            if show_commands_accordion() {
+                                div { class: "mt-4 space-y-4",
+                                    // Available Commands
+                                    if !commands.is_empty() {
+                                        div {
+                                            h3 { class: "text-lg font-medium text-gray-800 mb-3", "Available Commands" }
+                                            div { class: "grid grid-cols-1 gap-2",
+                                                for cmd in commands.iter() {
+                                                    div { 
+                                                        class: format!("p-3 border rounded-lg cursor-pointer transition-colors {}",
+                                                            if current_project().selected_build_commands.contains(cmd) {
+                                                                "border-green-500 bg-green-50"
+                                                            } else {
+                                                                "border-gray-200 hover:border-gray-300"
+                                                            }
+                                                        ),
+                                                        onclick: {
+                                                            let cmd = cmd.clone();
+                                                            move |_| {
+                                                                let mut proj = current_project();
+                                                                if proj.selected_build_commands.contains(&cmd) {
+                                                                    // Remove command
+                                                                    proj.selected_build_commands.retain(|c| c != &cmd);
+                                                                } else {
+                                                                    // Add command
+                                                                    proj.selected_build_commands.push(cmd.clone());
+                                                                }
+                                                                current_project.set(proj.clone());
+                                                                
+                                                                let mut all_projects = load_projects();
+                                                                if let Some(p) = all_projects.iter_mut().find(|p| p.id == proj.id) {
+                                                                    p.selected_build_commands = proj.selected_build_commands.clone();
+                                                                }
+                                                                save_projects(&all_projects);
+                                                            }
+                                                        },
+                                                        
+                                                        div { class: "flex items-center justify-between",
+                                                            div {
+                                                                h4 { class: "font-medium text-gray-900", "{cmd}" }
+                                                            }
+                                                            if current_project().selected_build_commands.contains(cmd) {
+                                                                span { class: "text-green-600 font-bold", "✓" }
+                                                            } else {
+                                                                span { class: "text-gray-400", "+" }
+                                                            }
+                                                        }
                                                     }
-                                                    save_projects(&all_projects);
                                                 }
-                                            },
-                                            
-                                            div { class: "flex items-center justify-between",
-                                                div {
-                                                    h3 { class: "font-medium text-gray-900", "{cmd}" }
-                                                }
-                                                if current_project().selected_build_command.as_ref() == Some(cmd) {
-                                                    span { class: "text-blue-600", "✓" }
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Selected Commands (with ordering)
+                                    if !current_project().selected_build_commands.is_empty() {
+                                        div { class: "border-t pt-4",
+                                            h3 { class: "text-lg font-medium text-gray-800 mb-3", "Execution Order" }
+                                            div { class: "space-y-2",
+                                                for (index, cmd) in current_project().selected_build_commands.iter().enumerate() {
+                                                    div { class: "flex items-center space-x-3 p-3 bg-blue-50 border border-blue-200 rounded-lg",
+                                                        // Order number
+                                                        div { class: "flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold",
+                                                            "{index + 1}"
+                                                        }
+                                                        
+                                                        // Command name
+                                                        div { class: "flex-1",
+                                                            span { class: "font-medium text-gray-900", "{cmd}" }
+                                                        }
+                                                        
+                                                        // Move buttons
+                                                        div { class: "flex space-x-1",
+                                                            if index > 0 {
+                                                                button {
+                                                                    class: "p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded",
+                                                                    onclick: {
+                                                                        let index = index;
+                                                                        move |_| {
+                                                                            let mut proj = current_project();
+                                                                            proj.selected_build_commands.swap(index, index - 1);
+                                                                            current_project.set(proj.clone());
+                                                                            
+                                                                            let mut all_projects = load_projects();
+                                                                            if let Some(p) = all_projects.iter_mut().find(|p| p.id == proj.id) {
+                                                                                p.selected_build_commands = proj.selected_build_commands.clone();
+                                                                            }
+                                                                            save_projects(&all_projects);
+                                                                        }
+                                                                    },
+                                                                    "↑"
+                                                                }
+                                                            }
+                                                            if index < current_project().selected_build_commands.len() - 1 {
+                                                                button {
+                                                                    class: "p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded",
+                                                                    onclick: {
+                                                                        let index = index;
+                                                                        move |_| {
+                                                                            let mut proj = current_project();
+                                                                            proj.selected_build_commands.swap(index, index + 1);
+                                                                            current_project.set(proj.clone());
+                                                                            
+                                                                            let mut all_projects = load_projects();
+                                                                            if let Some(p) = all_projects.iter_mut().find(|p| p.id == proj.id) {
+                                                                                p.selected_build_commands = proj.selected_build_commands.clone();
+                                                                            }
+                                                                            save_projects(&all_projects);
+                                                                        }
+                                                                    },
+                                                                    "↓"
+                                                                }
+                                                            }
+                                                            // Remove button
+                                                            button {
+                                                                class: "p-1 text-red-500 hover:text-red-700 hover:bg-red-100 rounded",
+                                                                onclick: {
+                                                                    let cmd = cmd.clone();
+                                                                    move |_| {
+                                                                        let mut proj = current_project();
+                                                                        proj.selected_build_commands.retain(|c| c != &cmd);
+                                                                        current_project.set(proj.clone());
+                                                                        
+                                                                        let mut all_projects = load_projects();
+                                                                        if let Some(p) = all_projects.iter_mut().find(|p| p.id == proj.id) {
+                                                                            p.selected_build_commands = proj.selected_build_commands.clone();
+                                                                        }
+                                                                        save_projects(&all_projects);
+                                                                    }
+                                                                },
+                                                                "✕"
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
                                 
-                                if current_project().selected_build_command.is_some() {
+                                // Build button inside accordion
+                                if !current_project().selected_build_commands.is_empty() {
                                     div { class: "mt-6 pt-4 border-t",
                                         button {
                                             class: "w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition-colors",
@@ -105,7 +229,19 @@ pub fn ProjectDetail(id: String) -> Element {
                                         }
                                     }
                                 }
-                            } else {
+                            }
+                            
+                            // Show message when accordion is closed but commands are selected
+                            if !show_commands_accordion() && !current_project().selected_build_commands.is_empty() {
+                                div { class: "mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg",
+                                    p { class: "text-sm text-blue-800",
+                                        "Click to expand and manage your {current_project().selected_build_commands.len()} selected build commands"
+                                    }
+                                }
+                            }
+                            
+                            // Show empty state when no commands available
+                            if commands.is_empty() {
                                 div { class: "text-center py-8",
                                     p { class: "text-gray-500", "No package.json found or no scripts available" }
                                 }
@@ -132,72 +268,58 @@ pub fn ProjectDetail(id: String) -> Element {
                                 div { class: "space-y-3",
                                     for (index, target_path) in current_project().target_paths.iter().enumerate() {
                                         div { class: "p-3 border border-gray-200 rounded-lg",
-                                            div { class: "flex items-center justify-between",
-                                                div { class: "flex-1",
-                                                    p { class: "font-medium text-gray-900", "{target_path.path}" }
-                                                    div { class: "flex items-center space-x-2 mt-1",
-                                                        span { 
-                                                            class: format!("text-xs px-2 py-1 rounded {}",
-                                                                if target_path.is_active {
-                                                                    "bg-green-100 text-green-800"
-                                                                } else {
-                                                                    "bg-gray-100 text-gray-600"
-                                                                }
-                                                            ),
-                                                            if target_path.is_active { "Active" } else { "Inactive" }
+                                            div { class: "flex items-center space-x-3",
+                                                // Checkbox for active/inactive
+                                                input {
+                                                    r#type: "checkbox",
+                                                    class: "w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2",
+                                                    checked: target_path.is_active,
+                                                    onchange: {
+                                                        let index = index;
+                                                        move |e| {
+                                                            let mut proj = current_project();
+                                                            proj.target_paths[index].is_active = e.checked();
+                                                            current_project.set(proj.clone());
+                                                            
+                                                            let mut all_projects = load_projects();
+                                                            if let Some(p) = all_projects.iter_mut().find(|p| p.id == proj.id) {
+                                                                p.target_paths[index].is_active = proj.target_paths[index].is_active;
+                                                            }
+                                                            save_projects(&all_projects);
                                                         }
                                                     }
                                                 }
-                                                div { class: "flex items-center space-x-2",
-                                                    button {
-                                                        class: format!("px-3 py-1 text-xs rounded transition-colors {}",
-                                                            if target_path.is_active {
-                                                                "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
-                                                            } else {
-                                                                "bg-green-100 text-green-800 hover:bg-green-200"
+                                                
+                                                // Path info
+                                                div { class: "flex-1",
+                                                    p { class: "font-medium text-gray-900", "{target_path.path}" }
+                                                }
+                                                
+                                                // Remove button
+                                                button {
+                                                    class: "px-3 py-1 text-xs bg-red-100 text-red-800 hover:bg-red-200 rounded transition-colors flex-shrink-0",
+                                                    onclick: {
+                                                        let index = index;
+                                                        move |_| {
+                                                            let mut proj = current_project();
+                                                            proj.target_paths.remove(index);
+                                                            current_project.set(proj.clone());
+                                                            
+                                                            let mut all_projects = load_projects();
+                                                            if let Some(p) = all_projects.iter_mut().find(|p| p.id == proj.id) {
+                                                                p.target_paths.remove(index);
                                                             }
-                                                        ),
-                                                        onclick: {
-                                                            let index = index;
-                                                            move |_| {
-                                                                let mut proj = current_project();
-                                                                proj.target_paths[index].is_active = !proj.target_paths[index].is_active;
-                                                                current_project.set(proj.clone());
-                                                                
-                                                                let mut all_projects = load_projects();
-                                                                if let Some(p) = all_projects.iter_mut().find(|p| p.id == proj.id) {
-                                                                    p.target_paths[index].is_active = proj.target_paths[index].is_active;
-                                                                }
-                                                                save_projects(&all_projects);
-                                                            }
-                                                        },
-                                                        if target_path.is_active { "Deactivate" } else { "Activate" }
-                                                    }
-                                                    button {
-                                                        class: "px-3 py-1 text-xs bg-red-100 text-red-800 hover:bg-red-200 rounded transition-colors",
-                                                        onclick: {
-                                                            let index = index;
-                                                            move |_| {
-                                                                let mut proj = current_project();
-                                                                proj.target_paths.remove(index);
-                                                                current_project.set(proj.clone());
-                                                                
-                                                                let mut all_projects = load_projects();
-                                                                if let Some(p) = all_projects.iter_mut().find(|p| p.id == proj.id) {
-                                                                    p.target_paths.remove(index);
-                                                                }
-                                                                save_projects(&all_projects);
-                                                            }
-                                                        },
-                                                        "Remove"
-                                                    }
+                                                            save_projects(&all_projects);
+                                                        }
+                                                    },
+                                                    "Remove"
                                                 }
                                             }
                                         }
                                     }
                                 }
                                 
-                                if current_project().target_paths.iter().any(|p| p.is_active) && current_project().selected_build_command.is_some() {
+                                if current_project().target_paths.iter().any(|p| p.is_active) && !current_project().selected_build_commands.is_empty() {
                                     div { class: "mt-6 pt-4 border-t",
                                         button {
                                             class: "w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors",

@@ -18,9 +18,9 @@ pub fn ProjectCard(project: Project) -> Element {
                     span { class: "text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded", 
                         "{project.target_paths.len()} paths"
                     }
-                    if let Some(cmd) = &project.selected_build_command {
+                    if !project.selected_build_commands.is_empty() {
                         span { class: "text-xs bg-green-100 text-green-800 px-2 py-1 rounded", 
-                            "{cmd}"
+                            "{project.selected_build_commands.len()} commands"
                         }
                     }
                 }

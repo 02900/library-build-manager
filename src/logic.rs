@@ -127,7 +127,7 @@ pub fn create_project(name: String, path: String) -> Project {
         name,
         path,
         build_commands,
-        selected_build_command: None,
+        selected_build_commands: vec![], // Start with empty ordered list
         target_paths: vec![],
     }
 }
@@ -142,12 +142,8 @@ pub fn update_project(project: &Project) {
 
 pub fn refresh_project_commands(project: &mut Project) {
     project.build_commands = parse_package_json(&project.path);
-    // Reset selected command if it no longer exists
-    if let Some(selected) = &project.selected_build_command {
-        if !project.build_commands.contains(selected) {
-            project.selected_build_command = None;
-        }
-    }
+    // Remove selected commands that are no longer available
+    project.selected_build_commands.retain(|cmd| project.build_commands.contains(cmd));
 }
 
 // Version management functions
@@ -262,8 +258,8 @@ pub async fn open_target_folder_dialog() -> Option<String> {
 
 // Main build and update logic
 pub fn build_and_update_project(project: &Project) -> Result<String, String> {
-    if project.selected_build_command.is_none() {
-        return Err("No build command selected".to_string());
+    if project.selected_build_commands.is_empty() {
+        return Err("No build commands selected".to_string());
     }
     
     let active_targets: Vec<_> = project.target_paths.iter()

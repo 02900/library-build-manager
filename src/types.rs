@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Project {
     pub id: String,
     pub name: String,
     pub path: String,
     pub build_commands: Vec<String>,
-    pub selected_build_command: Option<String>,
+    pub selected_build_commands: Vec<String>, // Ordered list of selected commands
     pub target_paths: Vec<TargetPath>,
 }
 
