@@ -201,16 +201,29 @@ enum PathStatus {
 }
 
 fn check_path_status() -> PathStatus {
-    // Check if library-build-management is available in PATH
-    match Command::new("which").arg("library-build-management").output() {
-        Ok(output) => {
-            if output.status.success() && !output.stdout.is_empty() {
+    let target_path = Path::new("/usr/local/bin/library-build-management");
+    
+    // First check if the symlink exists
+    if target_path.exists() {
+        // Double-check with 'which' command
+        match Command::new("which").arg("library-build-management").output() {
+            Ok(output) => {
+                if output.status.success() && !output.stdout.is_empty() {
+                    PathStatus::InPath
+                } else {
+                    // Symlink exists but 'which' doesn't find it - might be a PATH issue
+                    // Still consider it as installed since the symlink is there
+                    PathStatus::InPath
+                }
+            }
+            Err(_) => {
+                // 'which' command failed, but symlink exists, so consider it installed
                 PathStatus::InPath
-            } else {
-                PathStatus::NotInPath
             }
         }
-        Err(e) => PathStatus::Error(format!("Failed to check PATH: {}", e))
+    } else {
+        // No symlink exists
+        PathStatus::NotInPath
     }
 }
 
@@ -225,8 +238,22 @@ async fn add_to_path() -> Result<String, String> {
     
     // Remove existing symlink if it exists
     if target_path.exists() {
-        fs::remove_file(target_path)
-            .map_err(|e| format!("Failed to remove existing symlink: {}", e))?;
+        // Try to remove normally first
+        match fs::remove_file(target_path) {
+            Ok(_) => {}, // Successfully removed
+            Err(_) => {
+                // Try with admin privileges if normal removal fails
+                #[cfg(target_os = "macos")]
+                {
+                    remove_symlink_with_admin(target_path)
+                        .map_err(|e| format!("Failed to remove existing symlink: {}", e))?;
+                }
+                #[cfg(not(target_os = "macos"))]
+                {
+                    return Err("Failed to remove existing symlink: Permission denied. Please run: sudo rm -f /usr/local/bin/library-build-management".to_string());
+                }
+            }
+        }
     }
     
     // Try to create symlink with elevated privileges if needed
