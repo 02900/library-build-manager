@@ -63,6 +63,12 @@ fn main() {
         return;
     }
     
+    // Check if we have empty string arguments (common with dx serve)
+    if args.len() == 2 && args[1].is_empty() {
+        launch_gui();
+        return;
+    }
+    
     // If arguments are provided, try to parse them as CLI commands
     match Cli::try_parse() {
         Ok(cli) => {
