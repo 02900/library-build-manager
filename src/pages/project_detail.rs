@@ -26,11 +26,14 @@ pub fn ProjectDetail(id: String) -> Element {
                     div { class: "max-w-4xl mx-auto mb-8",
                         div { class: "flex items-center justify-between",
                             div {
-                                Link { to: crate::Route::Home {}, 
+                                Link {
+                                    to: crate::Route::Home {},
                                     class: "text-blue-600 hover:text-blue-800 mb-2 inline-block",
                                     "← Back to Projects"
                                 }
-                                h1 { class: "text-3xl font-bold text-gray-900", "{current_project().name}" }
+                                h1 { class: "text-3xl font-bold text-gray-900",
+                                    "{current_project().name}"
+                                }
                                 p { class: "text-gray-600 mt-1", "{current_project().path}" }
                             }
                         }
@@ -40,14 +43,15 @@ pub fn ProjectDetail(id: String) -> Element {
                         // Build Commands Section
                         div { class: "bg-white rounded-lg shadow-md p-6",
                             // Accordion Header
-                            div { 
+                            div {
                                 class: "flex items-center justify-between cursor-pointer p-2 hover:bg-gray-50 rounded-lg",
                                 onclick: move |_| show_commands_accordion.set(!show_commands_accordion()),
                                 div { class: "flex items-center space-x-3",
-                                    h2 { class: "text-xl font-semibold text-gray-900", "Build Commands" }
+                                    h2 { class: "text-xl font-semibold text-gray-900",
+                                        "Build Commands"
+                                    }
                                     if !current_project().selected_build_commands.is_empty() {
-                                        span { 
-                                            class: "bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full",
+                                        span { class: "bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full",
                                             "{current_project().selected_build_commands.len()} selected"
                                         }
                                     }
@@ -60,23 +64,25 @@ pub fn ProjectDetail(id: String) -> Element {
                                     }
                                 }
                             }
-                            
                             // Accordion Content
                             if show_commands_accordion() {
                                 div { class: "mt-4 space-y-4",
                                     // Available Commands
                                     if !commands.is_empty() {
                                         div {
-                                            h3 { class: "text-lg font-medium text-gray-800 mb-3", "Available Commands" }
+                                            h3 { class: "text-lg font-medium text-gray-800 mb-3",
+                                                "Available Commands"
+                                            }
                                             div { class: "grid grid-cols-1 gap-2",
                                                 for cmd in commands.iter() {
-                                                    div { 
-                                                        class: format!("p-3 border rounded-lg cursor-pointer transition-colors {}",
+                                                    div {
+                                                        class: format!(
+                                                            "p-3 border rounded-lg cursor-pointer transition-colors {}",
                                                             if current_project().selected_build_commands.contains(cmd) {
                                                                 "border-green-500 bg-green-50"
                                                             } else {
                                                                 "border-gray-200 hover:border-gray-300"
-                                                            }
+                                                            },
                                                         ),
                                                         onclick: {
                                                             let cmd = cmd.clone();
@@ -90,7 +96,7 @@ pub fn ProjectDetail(id: String) -> Element {
                                                                     proj.selected_build_commands.push(cmd.clone());
                                                                 }
                                                                 current_project.set(proj.clone());
-                                                                
+
                                                                 let mut all_projects = load_projects();
                                                                 if let Some(p) = all_projects.iter_mut().find(|p| p.id == proj.id) {
                                                                     p.selected_build_commands = proj.selected_build_commands.clone();
@@ -98,15 +104,20 @@ pub fn ProjectDetail(id: String) -> Element {
                                                                 save_projects(&all_projects);
                                                             }
                                                         },
-                                                        
                                                         div { class: "flex items-center justify-between",
                                                             div {
-                                                                h4 { class: "font-medium text-gray-900", "{cmd}" }
+                                                                h4 { class: "font-medium text-gray-900",
+                                                                    "{cmd}"
+                                                                }
                                                             }
                                                             if current_project().selected_build_commands.contains(cmd) {
-                                                                span { class: "text-green-600 font-bold", "✓" }
+                                                                span { class: "text-green-600 font-bold",
+                                                                    "✓"
+                                                                }
                                                             } else {
-                                                                span { class: "text-gray-400", "+" }
+                                                                span { class: "text-gray-400",
+                                                                    "+"
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -114,24 +125,25 @@ pub fn ProjectDetail(id: String) -> Element {
                                             }
                                         }
                                     }
-                                    
                                     // Selected Commands (with ordering)
                                     if !current_project().selected_build_commands.is_empty() {
                                         div { class: "border-t pt-4",
-                                            h3 { class: "text-lg font-medium text-gray-800 mb-3", "Execution Order" }
+                                            h3 { class: "text-lg font-medium text-gray-800 mb-3",
+                                                "Execution Order"
+                                            }
                                             div { class: "space-y-2",
-                                                for (index, cmd) in current_project().selected_build_commands.iter().enumerate() {
+                                                for (index , cmd) in current_project().selected_build_commands.iter().enumerate() {
                                                     div { class: "flex items-center space-x-3 p-3 bg-blue-50 border border-blue-200 rounded-lg",
                                                         // Order number
                                                         div { class: "flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold",
                                                             "{index + 1}"
                                                         }
-                                                        
                                                         // Command name
                                                         div { class: "flex-1",
-                                                            span { class: "font-medium text-gray-900", "{cmd}" }
+                                                            span { class: "font-medium text-gray-900",
+                                                                "{cmd}"
+                                                            }
                                                         }
-                                                        
                                                         // Move buttons
                                                         div { class: "flex space-x-1",
                                                             if index > 0 {
@@ -143,7 +155,7 @@ pub fn ProjectDetail(id: String) -> Element {
                                                                             let mut proj = current_project();
                                                                             proj.selected_build_commands.swap(index, index - 1);
                                                                             current_project.set(proj.clone());
-                                                                            
+
                                                                             let mut all_projects = load_projects();
                                                                             if let Some(p) = all_projects.iter_mut().find(|p| p.id == proj.id) {
                                                                                 p.selected_build_commands = proj.selected_build_commands.clone();
@@ -163,7 +175,7 @@ pub fn ProjectDetail(id: String) -> Element {
                                                                             let mut proj = current_project();
                                                                             proj.selected_build_commands.swap(index, index + 1);
                                                                             current_project.set(proj.clone());
-                                                                            
+
                                                                             let mut all_projects = load_projects();
                                                                             if let Some(p) = all_projects.iter_mut().find(|p| p.id == proj.id) {
                                                                                 p.selected_build_commands = proj.selected_build_commands.clone();
@@ -183,7 +195,7 @@ pub fn ProjectDetail(id: String) -> Element {
                                                                         let mut proj = current_project();
                                                                         proj.selected_build_commands.retain(|c| c != &cmd);
                                                                         current_project.set(proj.clone());
-                                                                        
+
                                                                         let mut all_projects = load_projects();
                                                                         if let Some(p) = all_projects.iter_mut().find(|p| p.id == proj.id) {
                                                                             p.selected_build_commands = proj.selected_build_commands.clone();
@@ -200,7 +212,6 @@ pub fn ProjectDetail(id: String) -> Element {
                                         }
                                     }
                                 }
-                                
                                 // Build button inside accordion
                                 if !current_project().selected_build_commands.is_empty() {
                                     div { class: "mt-6 pt-4 border-t",
@@ -230,7 +241,6 @@ pub fn ProjectDetail(id: String) -> Element {
                                     }
                                 }
                             }
-                            
                             // Show message when accordion is closed but commands are selected
                             if !show_commands_accordion() && !current_project().selected_build_commands.is_empty() {
                                 div { class: "mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg",
@@ -239,11 +249,12 @@ pub fn ProjectDetail(id: String) -> Element {
                                     }
                                 }
                             }
-                            
                             // Show empty state when no commands available
                             if commands.is_empty() {
                                 div { class: "text-center py-8",
-                                    p { class: "text-gray-500", "No package.json found or no scripts available" }
+                                    p { class: "text-gray-500",
+                                        "No package.json found or no scripts available"
+                                    }
                                 }
                             }
                         }
@@ -251,22 +262,25 @@ pub fn ProjectDetail(id: String) -> Element {
                         // Target Paths Section
                         div { class: "bg-white rounded-lg shadow-md p-6",
                             div { class: "flex items-center justify-between mb-4",
-                                h2 { class: "text-xl font-semibold text-gray-900", "Target Paths" }
+                                h2 { class: "text-xl font-semibold text-gray-900",
+                                    "Target Paths"
+                                }
                                 button {
                                     class: "bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition-colors",
                                     onclick: move |_| show_add_path_modal.set(true),
                                     "+ Add Path"
                                 }
                             }
-                            
                             if current_project().target_paths.is_empty() {
                                 div { class: "text-center py-8",
                                     p { class: "text-gray-500", "No target paths configured" }
-                                    p { class: "text-sm text-gray-400 mt-1", "Add paths where the built library should be copied" }
+                                    p { class: "text-sm text-gray-400 mt-1",
+                                        "Add paths where the built library should be copied"
+                                    }
                                 }
                             } else {
                                 div { class: "space-y-3",
-                                    for (index, target_path) in current_project().target_paths.iter().enumerate() {
+                                    for (index , target_path) in current_project().target_paths.iter().enumerate() {
                                         div { class: "p-3 border border-gray-200 rounded-lg",
                                             div { class: "flex items-center space-x-3",
                                                 // Checkbox for active/inactive
@@ -280,21 +294,21 @@ pub fn ProjectDetail(id: String) -> Element {
                                                             let mut proj = current_project();
                                                             proj.target_paths[index].is_active = e.checked();
                                                             current_project.set(proj.clone());
-                                                            
+
                                                             let mut all_projects = load_projects();
                                                             if let Some(p) = all_projects.iter_mut().find(|p| p.id == proj.id) {
                                                                 p.target_paths[index].is_active = proj.target_paths[index].is_active;
                                                             }
                                                             save_projects(&all_projects);
                                                         }
-                                                    }
+                                                    },
                                                 }
-                                                
                                                 // Path info
                                                 div { class: "flex-1",
-                                                    p { class: "font-medium text-gray-900", "{target_path.path}" }
+                                                    p { class: "font-medium text-gray-900",
+                                                        "{target_path.path}"
+                                                    }
                                                 }
-                                                
                                                 // Remove button
                                                 button {
                                                     class: "px-3 py-1 text-xs bg-red-100 text-red-800 hover:bg-red-200 rounded transition-colors flex-shrink-0",
@@ -304,7 +318,7 @@ pub fn ProjectDetail(id: String) -> Element {
                                                             let mut proj = current_project();
                                                             proj.target_paths.remove(index);
                                                             current_project.set(proj.clone());
-                                                            
+
                                                             let mut all_projects = load_projects();
                                                             if let Some(p) = all_projects.iter_mut().find(|p| p.id == proj.id) {
                                                                 p.target_paths.remove(index);
@@ -318,8 +332,9 @@ pub fn ProjectDetail(id: String) -> Element {
                                         }
                                     }
                                 }
-                                
-                                if current_project().target_paths.iter().any(|p| p.is_active) && !current_project().selected_build_commands.is_empty() {
+                                if current_project().target_paths.iter().any(|p| p.is_active)
+                                    && !current_project().selected_build_commands.is_empty()
+                                {
                                     div { class: "mt-6 pt-4 border-t",
                                         button {
                                             class: "w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors",
@@ -355,17 +370,18 @@ pub fn ProjectDetail(id: String) -> Element {
                         div { class: "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50",
                             div { class: "bg-white rounded-lg p-6 w-full max-w-md mx-4",
                                 h2 { class: "text-xl font-semibold mb-4", "Add Target Path" }
-                                
                                 div { class: "space-y-4",
                                     div {
-                                        label { class: "block text-sm font-medium text-gray-700 mb-1", "Target Path" }
+                                        label { class: "block text-sm font-medium text-gray-700 mb-1",
+                                            "Target Path"
+                                        }
                                         div { class: "flex space-x-2",
                                             input {
                                                 class: "flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
                                                 r#type: "text",
                                                 placeholder: "/path/to/target",
                                                 value: new_path(),
-                                                oninput: move |e| new_path.set(e.value())
+                                                oninput: move |e| new_path.set(e.value()),
                                             }
                                             button {
                                                 class: "px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors",
@@ -381,7 +397,6 @@ pub fn ProjectDetail(id: String) -> Element {
                                         }
                                     }
                                 }
-                                
                                 div { class: "flex justify-end space-x-3 mt-6",
                                     button {
                                         class: "px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors",
@@ -400,17 +415,17 @@ pub fn ProjectDetail(id: String) -> Element {
                                                 path: new_path().trim().to_string(),
                                                 is_active: true,
                                             };
-                                            
+
                                             let mut proj = current_project();
                                             proj.target_paths.push(target_path);
                                             current_project.set(proj.clone());
-                                            
+
                                             let mut all_projects = load_projects();
                                             if let Some(p) = all_projects.iter_mut().find(|p| p.id == proj.id) {
                                                 *p = proj;
                                             }
                                             save_projects(&all_projects);
-                                            
+
                                             show_add_path_modal.set(false);
                                             new_path.set(String::new());
                                         },
@@ -425,17 +440,20 @@ pub fn ProjectDetail(id: String) -> Element {
                     if show_result_modal() {
                         div { class: "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50",
                             div { class: "bg-white rounded-lg p-6 w-full max-w-lg mx-4",
-                                h2 { 
-                                    class: format!("text-xl font-semibold mb-4 {}",
-                                        if is_success() { "text-green-800" } else { "text-red-800" }
+                                h2 {
+                                    class: format!(
+                                        "text-xl font-semibold mb-4 {}",
+                                        if is_success() { "text-green-800" } else { "text-red-800" },
                                     ),
-                                    if is_success() { "Success!" } else { "Error" }
+                                    if is_success() {
+                                        "Success!"
+                                    } else {
+                                        "Error"
+                                    }
                                 }
-                                
                                 div { class: "bg-gray-50 rounded-md p-4 mb-4",
                                     pre { class: "text-sm whitespace-pre-wrap", "{result_message()}" }
                                 }
-                                
                                 div { class: "flex justify-end",
                                     button {
                                         class: "px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors",
@@ -454,8 +472,10 @@ pub fn ProjectDetail(id: String) -> Element {
                 div { class: "min-h-screen bg-gray-50 p-6",
                     div { class: "max-w-4xl mx-auto text-center py-12",
                         h1 { class: "text-2xl font-bold text-gray-900 mb-4", "Project Not Found" }
-                        p { class: "text-gray-600 mb-6", "The project you're looking for doesn't exist." }
-                        Link { 
+                        p { class: "text-gray-600 mb-6",
+                            "The project you're looking for doesn't exist."
+                        }
+                        Link {
                             to: crate::Route::Home {},
                             class: "bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors",
                             "Back to Projects"
