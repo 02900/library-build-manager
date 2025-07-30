@@ -543,7 +543,8 @@ async fn add_to_path_windows() -> Result<String, String> {
         .map_err(|e| format!("Failed to execute PowerShell: {}", e))?;
     
     if output.status.success() {
-        let result = String::from_utf8_lossy(&output.stdout).trim();
+        let stdout_content = String::from_utf8_lossy(&output.stdout);
+        let result = stdout_content.trim();
         match result {
             "SUCCESS" => Ok("✅ Successfully added library-build-management to PATH".to_string()),
             "ALREADY_EXISTS" => Ok("✅ Already in PATH".to_string()),
