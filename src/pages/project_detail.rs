@@ -19,8 +19,33 @@ pub fn ProjectDetail(id: String) -> Element {
             let mut show_commands_accordion = use_signal(|| false);
             let mut is_building = use_signal(|| false);
             let mut current_command = use_signal(|| String::new());
+            let mut build_start_time = use_signal(|| None::<std::time::Instant>);
+            let mut elapsed_time = use_signal(|| String::new());
+            let mut build_process_handle = use_signal(|| None::<tokio::process::Child>);
             
             let commands = parse_package_json(&current_project().path);
+            
+            // Timer effect to update elapsed time during build
+            use_future(move || {
+                async move {
+                    loop {
+                        if let Some(start_time) = build_start_time() {
+                            let elapsed = start_time.elapsed();
+                            let seconds = elapsed.as_secs();
+                            let minutes = seconds / 60;
+                            let remaining_seconds = seconds % 60;
+                            
+                            if minutes > 0 {
+                                elapsed_time.set(format!("{}m {}s", minutes, remaining_seconds));
+                            } else {
+                                elapsed_time.set(format!("{}s", remaining_seconds));
+                            }
+                        }
+                        
+                        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                    }
+                }
+            });
 
             rsx! {
                 div { class: "min-h-screen bg-gray-50 p-6",
@@ -313,59 +338,98 @@ pub fn ProjectDetail(id: String) -> Element {
                                     && !current_project().selected_build_commands.is_empty()
                                 {
                                     div { class: "mt-6 pt-4 border-t",
-                                        button {
-                                            class: if is_building() {
-                                                "w-full bg-blue-500 text-white py-2 px-4 rounded-lg cursor-not-allowed opacity-75"
-                                            } else {
-                                                "w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors"
-                                            },
-                                            disabled: is_building(),
-                                            onclick: {
-                                                let project = current_project();
-                                                move |_| {
-                                                    if is_building() { return; }
-                                                    
-                                                    let project_clone = project.clone();
-                                                    is_building.set(true);
-                                                    current_command.set("Starting build...".to_string());
-                                                    
-                                                    spawn(async move {
-                                                        match build_and_update_project_with_progress(&project_clone, current_command.clone()).await {
-                                                            Ok(_) => {
-                                                                result_message.set("✅ Build and update completed successfully!\n\nAll selected commands were executed and target paths were updated with the new version.".to_string());
-                                                                is_success.set(true);
+                                        if is_building() {
+                                            // Show both build status and cancel button when building
+                                            div { class: "space-y-3",
+                                                // Build progress button (disabled)
+                                                button {
+                                                    class: "w-full bg-blue-500 text-white py-3 px-4 rounded-lg cursor-not-allowed opacity-75",
+                                                    disabled: true,
+                                                    // Button content with spinner, timer and dynamic text
+                                                    div { class: "flex flex-col items-center justify-center space-y-1",
+                                                        div { class: "flex items-center space-x-2",
+                                                            // Spinning icon
+                                                            svg {
+                                                                class: "animate-spin h-4 w-4",
+                                                                xmlns: "http://www.w3.org/2000/svg",
+                                                                fill: "none",
+                                                                "viewBox": "0 0 24 24",
+                                                                stroke: "currentColor",
+                                                                path {
+                                                                    "stroke-linecap": "round",
+                                                                    "stroke-linejoin": "round",
+                                                                    "stroke-width": "2",
+                                                                    d: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                                                                }
                                                             }
-                                                            Err(e) => {
-                                                                result_message.set(format!("Update failed: {}", e));
-                                                                is_success.set(false);
-                                                            }
+                                                            span { "{current_command()}" }
                                                         }
-                                                        is_building.set(false);
-                                                        current_command.set(String::new());
-                                                        show_result_modal.set(true);
-                                                    });
-                                                }
-                                            },
-                                            // Button content with spinner and dynamic text
-                                            if is_building() {
-                                                div { class: "flex items-center justify-center space-x-2",
-                                                    // Spinning icon
-                                                    svg {
-                                                        class: "animate-spin h-4 w-4",
-                                                        xmlns: "http://www.w3.org/2000/svg",
-                                                        fill: "none",
-                                                        "viewBox": "0 0 24 24",
-                                                        stroke: "currentColor",
-                                                        path {
-                                                            "stroke-linecap": "round",
-                                                            "stroke-linejoin": "round",
-                                                            "stroke-width": "2",
-                                                            d: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                                                        if !elapsed_time().is_empty() {
+                                                            div { class: "text-xs opacity-75",
+                                                                "⏱️ {elapsed_time()}"
+                                                            }
                                                         }
                                                     }
-                                                    span { "{current_command()}" }
                                                 }
-                                            } else {
+                                                // Cancel button
+                                                button {
+                                                    class: "w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg transition-colors",
+                                                    onclick: move |_| {
+                                                        spawn(async move {
+                                                            if let Err(e) = cancel_build_process(build_process_handle.clone()).await {
+                                                                result_message.set(format!("Failed to cancel: {}", e));
+                                                                is_success.set(false);
+                                                                show_result_modal.set(true);
+                                                            } else {
+                                                                result_message.set("❌ Build cancelled by user".to_string());
+                                                                is_success.set(false);
+                                                                show_result_modal.set(true);
+                                                            }
+                                                            is_building.set(false);
+                                                            current_command.set(String::new());
+                                                            build_start_time.set(None);
+                                                            elapsed_time.set(String::new());
+                                                            build_process_handle.set(None);
+                                                        });
+                                                    },
+                                                    "❌ Cancel Build"
+                                                }
+                                            }
+                                        } else {
+                                            // Normal build button when not building
+                                            button {
+                                                class: "w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors",
+                                                onclick: {
+                                                    let project = current_project();
+                                                    move |_| {
+                                                        if is_building() { return; }
+                                                        
+                                                        let project_clone = project.clone();
+                                                        is_building.set(true);
+                                                        current_command.set("Starting build...".to_string());
+                                                        build_start_time.set(Some(std::time::Instant::now()));
+                                                        elapsed_time.set("0s".to_string());
+                                                        
+                                                        spawn(async move {
+                                                            match build_and_update_project_cancellable(&project_clone, current_command.clone(), build_process_handle.clone()).await {
+                                                                Ok(_) => {
+                                                                    result_message.set("✅ Build and update completed successfully!\n\nAll selected commands were executed and target paths were updated with the new version.".to_string());
+                                                                    is_success.set(true);
+                                                                }
+                                                                Err(e) => {
+                                                                    result_message.set(format!("Update failed: {}", e));
+                                                                    is_success.set(false);
+                                                                }
+                                                            }
+                                                            is_building.set(false);
+                                                            current_command.set(String::new());
+                                                            build_start_time.set(None);
+                                                            elapsed_time.set(String::new());
+                                                            build_process_handle.set(None);
+                                                            show_result_modal.set(true);
+                                                        });
+                                                    }
+                                                },
                                                 "🚀 Build & Update Targets"
                                             }
                                         }

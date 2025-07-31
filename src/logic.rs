@@ -1,6 +1,156 @@
 use crate::types::*;
 use serde_json;
 use dioxus::prelude::Writable;
+use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
+use once_cell::sync::Lazy;
+use sysinfo::{System, Pid};
+
+// Global process tracking for cleanup on app exit
+static ACTIVE_PROCESSES: Lazy<Arc<Mutex<HashMap<String, tokio::process::Child>>>> = 
+    Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
+
+// Register a process for tracking
+pub fn register_process(id: String, child: tokio::process::Child) {
+    if let Ok(mut processes) = ACTIVE_PROCESSES.lock() {
+        processes.insert(id, child);
+    }
+}
+
+// Unregister a process when it completes
+pub fn unregister_process(id: &str) {
+    if let Ok(mut processes) = ACTIVE_PROCESSES.lock() {
+        processes.remove(id);
+    }
+}
+
+// Kill a process tree (parent + all children) - cross-platform
+pub async fn kill_process_tree(pid: u32) -> Result<(), String> {
+    let mut system = System::new_all();
+    system.refresh_all();
+    
+    // Find all child processes recursively
+    let mut processes_to_kill = Vec::new();
+    collect_child_processes(&system, Pid::from(pid as usize), &mut processes_to_kill);
+    
+    // Add the parent process
+    processes_to_kill.push(pid);
+    
+    println!("🧹 Killing process tree for PID {}: {} processes", pid, processes_to_kill.len());
+    
+    // For bash processes, also try to kill by process group
+    #[cfg(unix)]
+    {
+        if let Some(process) = system.process(Pid::from(pid as usize)) {
+            let process_name = process.name();
+            if process_name.contains("bash") || process_name.contains("sh") {
+                println!("🔪 Detected bash process, using process group kill");
+                // Kill the entire process group
+                let _ = std::process::Command::new("kill")
+                    .arg("-TERM")
+                    .arg(format!("-{}", pid))
+                    .output();
+                
+                // Wait a bit for graceful shutdown
+                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                
+                // Force kill the process group
+                let _ = std::process::Command::new("kill")
+                    .arg("-KILL")
+                    .arg(format!("-{}", pid))
+                    .output();
+            }
+        }
+    }
+    
+    // Kill all processes (children first, then parent)
+    for &process_pid in processes_to_kill.iter().rev() {
+        kill_single_process(process_pid).await;
+    }
+    
+    // Double-check: refresh and kill any remaining npm/node processes
+    system.refresh_all();
+    for (proc_pid, process) in system.processes() {
+        let process_name = process.name().to_lowercase();
+        if process_name.contains("npm") || process_name.contains("node") {
+            if let Some(parent_pid) = process.parent() {
+                if parent_pid.as_u32() == pid || processes_to_kill.contains(&parent_pid.as_u32()) {
+                    println!("🔪 Killing orphaned {}: {}", process_name, proc_pid.as_u32());
+                    kill_single_process(proc_pid.as_u32()).await;
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+// Recursively collect all child processes
+fn collect_child_processes(system: &System, parent_pid: Pid, processes: &mut Vec<u32>) {
+    for (pid, process) in system.processes() {
+        if let Some(process_parent_pid) = process.parent() {
+            if process_parent_pid == parent_pid {
+                let child_pid = pid.as_u32();
+                processes.push(child_pid);
+                // Recursively find children of this child
+                collect_child_processes(system, *pid, processes);
+            }
+        }
+    }
+}
+
+// Kill a single process - cross-platform
+async fn kill_single_process(pid: u32) {
+    #[cfg(unix)]
+    {
+        // On Unix systems, use SIGTERM first, then SIGKILL if needed
+        use std::process::Command;
+        
+        println!("🔪 Terminating process {} (SIGTERM)", pid);
+        let _ = Command::new("kill")
+            .arg("-TERM")
+            .arg(pid.to_string())
+            .output();
+        
+        // Wait a bit for graceful shutdown
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        
+        // Force kill if still running
+        println!("🔪 Force killing process {} (SIGKILL)", pid);
+        let _ = Command::new("kill")
+            .arg("-KILL")
+            .arg(pid.to_string())
+            .output();
+    }
+    
+    #[cfg(windows)]
+    {
+        // On Windows, use taskkill
+        use std::process::Command;
+        
+        println!("🔪 Terminating process {} (Windows)", pid);
+        let _ = Command::new("taskkill")
+            .arg("/F")
+            .arg("/PID")
+            .arg(pid.to_string())
+            .output();
+    }
+}
+
+// Kill all active processes (called on app exit)
+pub async fn cleanup_all_processes() {
+    if let Ok(mut processes) = ACTIVE_PROCESSES.lock() {
+        for (id, mut child) in processes.drain() {
+            println!("🧹 Cleaning up process tree: {}", id);
+            if let Some(pid) = child.id() {
+                let _ = kill_process_tree(pid).await;
+            } else {
+                // Fallback to simple kill if PID not available
+                let _ = child.kill().await;
+            }
+        }
+    }
+}
 
 // Helper function to find npm binary path
 fn find_npm_path() -> Option<String> {
@@ -566,4 +716,184 @@ pub async fn build_and_update_project_with_progress(
     progress_signal.set("Finalizing...".to_string());
     
     Ok(results.join("\n"))
+}
+
+// Build with cancellation support and PID tracking
+pub async fn build_and_update_project_cancellable(
+    project: &Project,
+    mut progress_signal: dioxus::prelude::Signal<String>,
+    mut process_handle: dioxus::prelude::Signal<Option<tokio::process::Child>>
+) -> Result<String, String> {
+    if project.selected_build_commands.is_empty() {
+        return Err("No build commands selected".to_string());
+    }
+    
+    let active_targets: Vec<_> = project.target_paths.iter()
+        .filter(|p| p.is_active)
+        .collect();
+    
+    if active_targets.is_empty() {
+        return Err("No active target paths".to_string());
+    }
+    
+    let project_path = std::path::Path::new(&project.path);
+    let package_json_path = project_path.join("package.json");
+    
+    // Check if package.json exists
+    if !package_json_path.exists() {
+        return Err("package.json not found in project directory".to_string());
+    }
+    
+    let mut results = Vec::new();
+    
+    // Step 1: Execute build commands using bash script with cancellation support
+    results.push(format!("🚀 Executing {} build commands in order...", project.selected_build_commands.len()));
+    progress_signal.set("Creating build script...".to_string());
+    
+    // Create and execute bash script with all commands
+    match create_build_script(&project.selected_build_commands, &project.path) {
+        Ok(script_path) => {
+            progress_signal.set("Executing build commands...".to_string());
+            
+            // Execute the bash script as a cancellable process with process group
+            let mut cmd = tokio::process::Command::new("bash");
+            cmd.arg(&script_path)
+                .current_dir(&project.path);
+            
+            // Set process group for better process tree management
+            #[cfg(unix)]
+            {
+                use std::os::unix::process::CommandExt;
+                cmd.process_group(0);
+            }
+            
+            let child = cmd.spawn()
+                .map_err(|e| {
+                    let _ = std::fs::remove_file(&script_path);
+                    format!("❌ Failed to start build script: {}", e)
+                })?;
+            
+            // Store the process handle for potential cancellation
+            process_handle.set(Some(child));
+            
+            // Wait for the process to complete
+            let output = if let Some(mut child_process) = process_handle.take() {
+                let result = child_process.wait_with_output().await;
+                process_handle.set(None);
+                result
+            } else {
+                let _ = std::fs::remove_file(&script_path);
+                return Err("Process handle was unexpectedly empty".to_string());
+            };
+            
+            // Clean up script file
+            let _ = std::fs::remove_file(&script_path);
+            
+            match output {
+                Ok(output) => {
+                    if output.status.success() {
+                        let stdout = String::from_utf8_lossy(&output.stdout);
+                        results.push(format!("✅ All build commands completed successfully\n{}", stdout));
+                    } else {
+                        let stderr = String::from_utf8_lossy(&output.stderr);
+                        return Err(format!("❌ Build script failed: {}", stderr));
+                    }
+                }
+                Err(e) => {
+                    return Err(format!("❌ Failed to execute build script: {}", e));
+                }
+            }
+        }
+        Err(e) => {
+            return Err(format!("❌ Failed to create build script: {}", e));
+        }
+    }
+    
+    results.push("\n📦 Build commands completed successfully!".to_string());
+    
+    // Step 2: Check if dist directory exists after build
+    progress_signal.set("Verifying build output...".to_string());
+    let dist_path = project_path.join("dist");
+    if !dist_path.exists() {
+        return Err("dist directory not found after build. Build commands may have failed.".to_string());
+    }
+    
+    results.push("\n📤 Updating target paths...".to_string());
+    
+    // Process each active target
+    for (index, target) in active_targets.iter().enumerate() {
+        progress_signal.set(format!("Updating target {} of {}: {}", index + 1, active_targets.len(), extract_project_name(&target.path)));
+        
+        let target_path = std::path::Path::new(&target.path);
+        
+        // Get current version from target's package.json
+        let current_version = get_package_version(&target.path)
+            .unwrap_or_else(|| "0.0.0".to_string());
+        
+        // Increment patch version
+        let new_version = increment_patch_version(&current_version);
+        
+        // Copy dist directory
+        let target_dist = target_path.join("dist");
+        if let Err(e) = copy_directory(&dist_path, &target_dist) {
+            results.push(format!("❌ Failed to copy dist to {}: {}", target.path, e));
+            continue;
+        }
+        
+        // Copy package.json
+        let target_package_json = target_path.join("package.json");
+        if let Err(e) = std::fs::copy(&package_json_path, &target_package_json) {
+            results.push(format!("❌ Failed to copy package.json to {}: {}", target.path, e));
+            continue;
+        }
+        
+        // Update version in target's package.json
+        if let Err(e) = update_package_version(&target.path, &new_version) {
+            results.push(format!("❌ Failed to update version in {}: {}", target.path, e));
+            continue;
+        }
+        
+        results.push(format!("✅ Updated {} (v{} → v{})", target.path, current_version, new_version));
+    }
+    
+    progress_signal.set("Finalizing...".to_string());
+    
+    Ok(results.join("\n"))
+}
+
+// Cancel a running build process with tree kill
+pub async fn cancel_build_process(mut process_handle: dioxus::prelude::Signal<Option<tokio::process::Child>>) -> Result<(), String> {
+    if let Some(mut child) = process_handle.take() {
+        if let Some(pid) = child.id() {
+            println!("❌ Cancelling build process tree (PID: {})", pid);
+            match kill_process_tree(pid).await {
+                Ok(_) => {
+                    process_handle.set(None);
+                    Ok(())
+                }
+                Err(e) => {
+                    // Fallback to simple kill if tree kill fails
+                    println!("⚠️ Tree kill failed, using fallback: {}", e);
+                    match child.kill().await {
+                        Ok(_) => {
+                            process_handle.set(None);
+                            Ok(())
+                        }
+                        Err(e) => Err(format!("Failed to cancel process: {}", e))
+                    }
+                }
+            }
+        } else {
+            // No PID available, use simple kill
+            match child.kill().await {
+                Ok(_) => {
+                    process_handle.set(None);
+                    Ok(())
+                }
+                Err(e) => Err(format!("Failed to cancel process: {}", e))
+            }
+        }
+    } else {
+        Err("No running process to cancel".to_string())
+    }
 }
