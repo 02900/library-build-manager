@@ -1,6 +1,6 @@
 use crate::types::*;
 use serde_json;
-use dioxus::prelude::Writable;
+use dioxus::prelude::{Writable, Readable};
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use once_cell::sync::Lazy;
@@ -776,15 +776,54 @@ pub async fn build_and_update_project_cancellable(
             // Store the process handle for potential cancellation
             process_handle.set(Some(child));
             
-            // Wait for the process to complete
-            let output = if let Some(mut child_process) = process_handle.take() {
-                let result = child_process.wait_with_output().await;
-                process_handle.set(None);
-                result
-            } else {
-                let _ = std::fs::remove_file(&script_path);
-                return Err("Process handle was unexpectedly empty".to_string());
+            // Wait for the process to complete while keeping handle available for cancellation
+            let output = loop {
+                // Check if we still have a process handle (not cancelled)
+                let has_process = process_handle.read().is_some();
+                if !has_process {
+                    // Process was cancelled
+                    break Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "Process was cancelled"));
+                }
+                
+                // Try to check if process is done
+                let mut process_done = false;
+                let mut process_result = None;
+                
+                if let Some(mut child_process) = process_handle.take() {
+                    match child_process.try_wait() {
+                        Ok(Some(_status)) => {
+                            // Process completed, get final output
+                            let result = child_process.wait_with_output().await;
+                            process_result = Some(result);
+                            process_done = true;
+                        }
+                        Ok(None) => {
+                            // Process still running, put it back
+                            process_handle.set(Some(child_process));
+                        }
+                        Err(e) => {
+                            // Error checking process status
+                            process_result = Some(Err(e));
+                            process_done = true;
+                        }
+                    }
+                } else {
+                    // Process was cancelled or removed
+                    break Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "Process was cancelled"));
+                }
+                
+                if process_done {
+                    if let Some(result) = process_result {
+                        break result;
+                    }
+                } else {
+                    // Process still running, wait a bit and check again
+                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                }
             };
+            
+            // Clear the process handle after completion
+            process_handle.set(None);
             
             // Clean up script file
             let _ = std::fs::remove_file(&script_path);
