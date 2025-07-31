@@ -64,13 +64,7 @@ pub fn Settings() -> Element {
                                             }
                                             p { class: "text-sm text-gray-600 mt-1", "The command is only available from the project directory" }
                                         },
-                                        PathStatus::Error(ref msg) => rsx! {
-                                            div { class: "flex items-center space-x-2 text-red-600",
-                                                span { "❌" }
-                                                span { class: "font-medium", "Error checking PATH status" }
-                                            }
-                                            p { class: "text-sm text-gray-600 mt-1", "{msg}" }
-                                        },
+
                                     }
                                 }
                                 // Action Buttons
@@ -261,7 +255,6 @@ pub fn Settings() -> Element {
 enum PathStatus {
     InPath,
     NotInPath,
-    Error(String),
 }
 
 fn check_path_status() -> PathStatus {

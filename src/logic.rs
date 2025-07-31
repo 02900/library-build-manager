@@ -1,7 +1,5 @@
 use crate::types::*;
-use serde_json::{self, Value};
-use std::fs;
-use std::path::Path;
+use serde_json;
 use dioxus::prelude::Writable;
 
 // Helper function to find npm binary path
@@ -212,19 +210,7 @@ pub fn create_project(name: String, path: String) -> Project {
     }
 }
 
-pub fn update_project(project: &Project) {
-    let mut projects = load_projects();
-    if let Some(existing) = projects.iter_mut().find(|p| p.id == project.id) {
-        *existing = project.clone();
-        save_projects(&projects);
-    }
-}
 
-pub fn refresh_project_commands(project: &mut Project) {
-    project.build_commands = parse_package_json(&project.path);
-    // Remove selected commands that are no longer available
-    project.selected_build_commands.retain(|cmd| project.build_commands.contains(cmd));
-}
 
 // Version management functions
 pub fn increment_patch_version(version: &str) -> String {
@@ -327,14 +313,7 @@ pub async fn open_folder_dialog() -> Option<String> {
     folder.map(|f| f.path().to_string_lossy().to_string())
 }
 
-pub async fn open_target_folder_dialog() -> Option<String> {
-    let folder = rfd::AsyncFileDialog::new()
-        .set_title("Select Target Folder")
-        .pick_folder()
-        .await;
-    
-    folder.map(|f| f.path().to_string_lossy().to_string())
-}
+
 
 // Main build and update logic
 pub async fn build_and_update_project(project: &Project) -> Result<String, String> {
