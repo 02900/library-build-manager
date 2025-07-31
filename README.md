@@ -1,11 +1,11 @@
 # Library Build Management App
 
-A **cross-platform** desktop application built with Dioxus 0.7 for managing build and testing of local development libraries.
+A **cross-platform** desktop application built with Dioxus 0.7 for managing build and testing of local development libraries with **robust build cancellation** and **real-time progress feedback**.
 
 ## 🌟 Features
 
 ### 🖥️ **Cross-Platform Desktop Interface**
-- ✅ **Project Management**: Add, edit and delete library projects
+- ✅ **Project Management**: Add, edit and delete library projects with confirmation modals
 - ✅ **Data Persistence**: Projects are automatically saved to `~/.library-build-management/projects.json`
 - ✅ **Native Folder Picker**: OS integration for directory selection
 - ✅ **package.json Analysis**: Automatic detection of available build commands
@@ -14,6 +14,9 @@ A **cross-platform** desktop application built with Dioxus 0.7 for managing buil
 - ✅ **Build Automation**: Automatic patch version increment and file copying
 - ✅ **Modern Interface**: Responsive UI with Tailwind CSS and modular components
 - ✅ **Settings Page**: System configuration and cross-platform CLI integration
+- ✅ **Robust Build Cancellation**: Cross-platform process tree termination with reliable cancellation
+- ✅ **Real-time Progress**: Live feedback showing exactly which command is executing
+- ✅ **Project Deletion**: Safe project removal with confirmation dialogs
 
 ### ⌨️ **Cross-Platform CLI (Command Line Interface)**
 - ✅ **Global Command**: Available from any terminal once installed in PATH
@@ -24,11 +27,12 @@ A **cross-platform** desktop application built with Dioxus 0.7 for managing buil
 - ✅ **Automatic PATH Integration**: Platform-specific installation from GUI
 
 ### 🌍 **Cross-Platform Support**
-- ✅ **Windows**: User PATH (no admin permissions required)
-- ✅ **macOS**: Symlinks with automatic admin permission requests
-- ✅ **Linux**: Standard Unix symlinks with appropriate fallbacks
+- ✅ **Windows**: User PATH (no admin permissions required), batch scripts, taskkill for process termination
+- ✅ **macOS**: Symlinks with automatic admin permission requests, bash scripts, kill for process termination
+- ✅ **Linux**: Standard Unix symlinks with appropriate fallbacks, bash scripts, kill for process termination
 - ✅ **Smart UI**: Platform-specific instructions
 - ✅ **Native Commands**: `where` on Windows, `which` on Unix
+- ✅ **Robust Process Management**: Cross-platform process groups and tree-kill functionality
 
 ## Main Functionalities
 
@@ -55,7 +59,11 @@ A **cross-platform** desktop application built with Dioxus 0.7 for managing buil
   - Full path visible as subtitle
 - **Actions**:
   - **Build & Update**: Execute multiple commands in order and update targets
+  - **Cancel Build**: Robust cancellation with process tree termination (Windows/macOS/Linux)
+  - **Real-time Progress**: Shows exactly which command is executing (e.g., "Running command 2 of 3: npm run build")
   - **Refresh Commands**: Update command list from package.json
+- **Project Management**:
+  - **Delete Project**: Remove project with confirmation modal to prevent accidental deletion
 
 ### 3. Settings Page
 - **CLI Integration**: 
@@ -68,16 +76,27 @@ A **cross-platform** desktop application built with Dioxus 0.7 for managing buil
   - ⚠️ Yellow: CLI not in PATH
   - ❌ Red: Verification error
 
-### 4. Update Logic
+### 4. Build & Update Logic
 When "Build & Update" is executed:
-1. Verifies that `dist` directory exists in the project
-2. For each active target path:
+1. **Individual Command Execution**: Each npm command runs separately with real-time progress feedback
+2. **Progress Tracking**: Shows "Running command X of Y: npm run [command]" for transparency
+3. **Cancellation Support**: Can be cancelled at any time with robust process tree termination
+4. **Build Verification**: Verifies that `dist` directory exists after build completion
+5. **Target Updates**: For each active target path:
    - Gets current version from target's package.json
    - Increments patch version (e.g., 1.0.0 → 1.0.1)
    - Copies project's `dist` directory to target
    - Copies project's `package.json` to target
    - Updates version in target's package.json
-3. Shows results summary with successes and errors
+6. **Results Summary**: Shows detailed results with successes and errors
+
+### 5. Build Cancellation System
+- **Cross-Platform**: Works on Windows, macOS, and Linux
+- **Process Groups**: Uses process groups for better process management
+- **Tree Kill**: Recursively terminates all child processes (npm, node, etc.)
+- **Reliable**: Handles both script processes and direct npm processes
+- **UI Integration**: Cancel button available during build execution
+- **Safe**: Prevents orphaned processes and resource leaks
 
 ## Project Structure
 
@@ -336,7 +355,8 @@ dx bundle
 - `uuid`: Unique ID generation
 - `dirs`: System directory access
 - `rfd`: Native file dialogs
-- `tokio`: Asynchronous runtime
+- `tokio`: Asynchronous runtime and process management
+- `sysinfo`: System process information for tree-kill functionality
 - `clap`: CLI argument parsing
 
 ### 🧩 Main Components
@@ -349,7 +369,11 @@ dx bundle
 ### 🔧 Utility Functions
 - `load_projects()` / `save_projects()`: Cross-platform persistence
 - `parse_package_json()`: Build command analysis
-- `build_and_update_project()`: Main update logic
+- `build_and_update_project_cancellable()`: Main build logic with cancellation support
+- `cancel_build_process()`: Robust build cancellation with process tree termination
+- `kill_process_tree()`: Cross-platform recursive process termination
+- `find_npm_path()`: Cross-platform npm binary detection
+- `delete_project()`: Safe project deletion with validation
 - `open_folder_dialog()`: Native folder picker
 - `add_to_path()` / `remove_from_path()`: Platform-specific PATH management
 - `check_path_status()`: CLI status verification
