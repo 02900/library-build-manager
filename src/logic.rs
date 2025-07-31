@@ -38,7 +38,7 @@ pub async fn kill_process_tree(pid: u32) -> Result<(), String> {
     
     println!("🧹 Killing process tree for PID {}: {} processes", pid, processes_to_kill.len());
     
-    // For bash processes, also try to kill by process group
+    // For script processes, also try to kill by process group - cross-platform
     #[cfg(unix)]
     {
         if let Some(process) = system.process(Pid::from(pid as usize)) {
@@ -58,6 +58,20 @@ pub async fn kill_process_tree(pid: u32) -> Result<(), String> {
                 let _ = std::process::Command::new("kill")
                     .arg("-KILL")
                     .arg(format!("-{}", pid))
+                    .output();
+            }
+        }
+    }
+    
+    #[cfg(windows)]
+    {
+        if let Some(process) = system.process(Pid::from(pid as usize)) {
+            let process_name = process.name();
+            if process_name.contains("cmd") || process_name.contains("conhost") {
+                println!("🔪 Detected Windows command process, using taskkill");
+                // Kill the entire process tree on Windows
+                let _ = std::process::Command::new("taskkill")
+                    .args(["/F", "/T", "/PID", &pid.to_string()])
                     .output();
             }
         }
@@ -128,11 +142,9 @@ async fn kill_single_process(pid: u32) {
         // On Windows, use taskkill
         use std::process::Command;
         
-        println!("🔪 Terminating process {} (Windows)", pid);
+        println!("🔪 Terminating process {} (Windows taskkill)", pid);
         let _ = Command::new("taskkill")
-            .arg("/F")
-            .arg("/PID")
-            .arg(pid.to_string())
+            .args(["/F", "/PID", &pid.to_string()])
             .output();
     }
 }
@@ -152,30 +164,72 @@ pub async fn cleanup_all_processes() {
     }
 }
 
-// Helper function to find npm binary path
+// Helper function to find npm binary path - cross-platform
 fn find_npm_path() -> Option<String> {
-    // Common npm locations on macOS
-    let possible_paths = [
-        "/usr/local/bin/npm",
-        "/opt/homebrew/bin/npm",
-        "/usr/bin/npm",
-    ];
-    
-    for path in &possible_paths {
-        if std::path::Path::new(path).exists() {
-            return Some(path.to_string());
+    #[cfg(windows)]
+    {
+        // Windows-specific npm locations
+        let possible_paths = [
+            "C:\\Program Files\\nodejs\\npm.cmd",
+            "C:\\Program Files (x86)\\nodejs\\npm.cmd",
+        ];
+        
+        // Check AppData npm location
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            let npm_path = format!("{}\\npm\\npm.cmd", appdata);
+            if std::path::Path::new(&npm_path).exists() {
+                return Some(npm_path);
+            }
+        }
+        
+        // Check Program Files locations
+        for path in &possible_paths {
+            if std::path::Path::new(path).exists() {
+                return Some(path.to_string());
+            }
+        }
+        
+        // Try to find npm using where command (Windows equivalent of which)
+        if let Ok(output) = std::process::Command::new("where")
+            .arg("npm")
+            .output() {
+            if output.status.success() {
+                if let Ok(path) = String::from_utf8(output.stdout) {
+                    let trimmed_path = path.lines().next().unwrap_or("").trim();
+                    if !trimmed_path.is_empty() {
+                        return Some(trimmed_path.to_string());
+                    }
+                }
+            }
         }
     }
     
-    // Try to find npm using which command
-    if let Ok(output) = std::process::Command::new("which")
-        .arg("npm")
-        .output() {
-        if output.status.success() {
-            if let Ok(path) = String::from_utf8(output.stdout) {
-                let trimmed_path = path.trim();
-                if !trimmed_path.is_empty() {
-                    return Some(trimmed_path.to_string());
+    #[cfg(unix)]
+    {
+        // Unix (macOS/Linux) npm locations
+        let possible_paths = [
+            "/usr/local/bin/npm",
+            "/opt/homebrew/bin/npm",
+            "/usr/bin/npm",
+            "/home/linuxbrew/.linuxbrew/bin/npm", // Linux Homebrew
+        ];
+        
+        for path in &possible_paths {
+            if std::path::Path::new(path).exists() {
+                return Some(path.to_string());
+            }
+        }
+        
+        // Try to find npm using which command
+        if let Ok(output) = std::process::Command::new("which")
+            .arg("npm")
+            .output() {
+            if output.status.success() {
+                if let Ok(path) = String::from_utf8(output.stdout) {
+                    let trimmed_path = path.trim();
+                    if !trimmed_path.is_empty() {
+                        return Some(trimmed_path.to_string());
+                    }
                 }
             }
         }
@@ -184,49 +238,86 @@ fn find_npm_path() -> Option<String> {
     None
 }
 
-// Helper function to create and execute a bash script with npm commands
+// Helper function to create and execute a script with npm commands - cross-platform
 fn create_build_script(commands: &[String], project_path: &str) -> Result<String, String> {
     use std::io::Write;
     
     // Find npm binary path
-    let npm_path = find_npm_path().unwrap_or_else(|| "npm".to_string());
+    let npm_path = find_npm_path().unwrap_or_else(|| {
+        #[cfg(windows)]
+        { "npm.cmd".to_string() }
+        #[cfg(unix)]
+        { "npm".to_string() }
+    });
     
-    // Create temporary script file
-    let script_path = format!("{}/build_script.sh", project_path);
-    
-    // Generate script content with full npm path and proper PATH setup
-    let mut script_content = String::from("#!/bin/bash\nset -e\n\n");
-    
-    // Add common Node.js paths to PATH
-    script_content.push_str("export PATH=\"/usr/local/bin:/opt/homebrew/bin:/usr/bin:$PATH\"\n\n");
-    
-    for command in commands {
-        script_content.push_str(&format!("echo 'Running: {} run {}'\n", npm_path, command));
-        script_content.push_str(&format!("{} run {}\n", npm_path, command));
-    }
-    
-    // Write script to file
-    match std::fs::File::create(&script_path) {
-        Ok(mut file) => {
-            if let Err(e) = file.write_all(script_content.as_bytes()) {
-                return Err(format!("Failed to write script: {}", e));
+    #[cfg(windows)]
+    {
+        // Create Windows batch script
+        let script_path = format!("{}\\build_script.bat", project_path);
+        
+        // Generate batch script content
+        let mut script_content = String::from("@echo off\nsetlocal\n\n");
+        
+        // Add common Node.js paths to PATH for Windows
+        script_content.push_str("set \"PATH=C:\\Program Files\\nodejs;C:\\Program Files (x86)\\nodejs;%APPDATA%\\npm;%PATH%\"\n\n");
+        
+        for command in commands {
+            script_content.push_str(&format!("echo Running: \"{}\" run {}\n", npm_path, command));
+            script_content.push_str(&format!("\"{}\" run {}\n", npm_path, command));
+            script_content.push_str("if errorlevel 1 exit /b 1\n\n");
+        }
+        
+        // Write script to file
+        match std::fs::File::create(&script_path) {
+            Ok(mut file) => {
+                if let Err(e) = file.write_all(script_content.as_bytes()) {
+                    return Err(format!("Failed to write script: {}", e));
+                }
+            }
+            Err(e) => {
+                return Err(format!("Failed to create script file: {}", e));
             }
         }
-        Err(e) => {
-            return Err(format!("Failed to create script file: {}", e));
-        }
+        
+        Ok(script_path)
     }
     
-    // Make script executable
     #[cfg(unix)]
     {
+        // Create Unix bash script
+        let script_path = format!("{}/build_script.sh", project_path);
+        
+        // Generate script content with full npm path and proper PATH setup
+        let mut script_content = String::from("#!/bin/bash\nset -e\n\n");
+        
+        // Add common Node.js paths to PATH
+        script_content.push_str("export PATH=\"/usr/local/bin:/opt/homebrew/bin:/usr/bin:/home/linuxbrew/.linuxbrew/bin:$PATH\"\n\n");
+        
+        for command in commands {
+            script_content.push_str(&format!("echo 'Running: {} run {}'\n", npm_path, command));
+            script_content.push_str(&format!("{} run {}\n", npm_path, command));
+        }
+        
+        // Write script to file
+        match std::fs::File::create(&script_path) {
+            Ok(mut file) => {
+                if let Err(e) = file.write_all(script_content.as_bytes()) {
+                    return Err(format!("Failed to write script: {}", e));
+                }
+            }
+            Err(e) => {
+                return Err(format!("Failed to create script file: {}", e));
+            }
+        }
+        
+        // Make script executable
         use std::os::unix::fs::PermissionsExt;
         if let Err(e) = std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755)) {
             return Err(format!("Failed to set script permissions: {}", e));
         }
+        
+        Ok(script_path)
     }
-    
-    Ok(script_path)
 }
 
 // Data persistence functions
@@ -755,16 +846,35 @@ pub async fn build_and_update_project_cancellable(
         Ok(script_path) => {
             progress_signal.set("Executing build commands...".to_string());
             
-            // Execute the bash script as a cancellable process with process group
-            let mut cmd = tokio::process::Command::new("bash");
-            cmd.arg(&script_path)
-                .current_dir(&project.path);
+            // Execute the script as a cancellable process with process group - cross-platform
+            #[cfg(windows)]
+            let mut cmd = {
+                let mut c = tokio::process::Command::new("cmd");
+                c.args(["/C", &script_path]);
+                c
+            };
+            
+            #[cfg(unix)]
+            let mut cmd = {
+                let mut c = tokio::process::Command::new("bash");
+                c.arg(&script_path);
+                c
+            };
+            
+            cmd.current_dir(&project.path);
             
             // Set process group for better process tree management
             #[cfg(unix)]
             {
                 use std::os::unix::process::CommandExt;
                 cmd.process_group(0);
+            }
+            
+            // On Windows, create a new process group
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x00000200); // CREATE_NEW_PROCESS_GROUP
             }
             
             let child = cmd.spawn()
