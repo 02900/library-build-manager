@@ -2,9 +2,6 @@ use dioxus::prelude::*;
 use dioxus::desktop::{WindowBuilder};
 use clap::{Parser, Subcommand};
 use std::process;
-use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
-use tokio::process::Child;
 
 mod types;
 mod logic;

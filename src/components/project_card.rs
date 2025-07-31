@@ -11,7 +11,7 @@ pub fn ProjectCard(project: Project, on_delete: Option<EventHandler<String>>) ->
             class: "bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow relative group",
             
             // Delete button (appears on hover)
-            if let Some(delete_handler) = on_delete {
+            if let Some(_delete_handler) = on_delete {
                 button {
                     class: "absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-red-500 hover:bg-red-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold",
                     onclick: move |e| {

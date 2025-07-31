@@ -67,7 +67,7 @@ pub fn Home() -> Element {
                         for project in projects().iter() {
                             ProjectCard { 
                                 project: project.clone(),
-                                on_delete: move |deleted_name: String| {
+                                on_delete: move |_deleted_name: String| {
                                     // Reload projects after deletion
                                     let updated_projects = load_projects();
                                     projects.set(updated_projects);

@@ -1,28 +1,10 @@
 use crate::types::*;
 use serde_json;
 use dioxus::prelude::{Writable, Readable};
-use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
-use once_cell::sync::Lazy;
 use sysinfo::{System, Pid};
 
-// Global process tracking for cleanup on app exit
-static ACTIVE_PROCESSES: Lazy<Arc<Mutex<HashMap<String, tokio::process::Child>>>> = 
-    Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
-
-// Register a process for tracking
-pub fn register_process(id: String, child: tokio::process::Child) {
-    if let Ok(mut processes) = ACTIVE_PROCESSES.lock() {
-        processes.insert(id, child);
-    }
-}
-
-// Unregister a process when it completes
-pub fn unregister_process(id: &str) {
-    if let Ok(mut processes) = ACTIVE_PROCESSES.lock() {
-        processes.remove(id);
-    }
-}
+// Note: Global process tracking system removed as it's not currently used
+// The current implementation uses direct process handle management in signals
 
 // Kill a process tree (parent + all children) - cross-platform
 pub async fn kill_process_tree(pid: u32) -> Result<(), String> {
@@ -149,20 +131,7 @@ async fn kill_single_process(pid: u32) {
     }
 }
 
-// Kill all active processes (called on app exit)
-pub async fn cleanup_all_processes() {
-    if let Ok(mut processes) = ACTIVE_PROCESSES.lock() {
-        for (id, mut child) in processes.drain() {
-            println!("🧹 Cleaning up process tree: {}", id);
-            if let Some(pid) = child.id() {
-                let _ = kill_process_tree(pid).await;
-            } else {
-                // Fallback to simple kill if PID not available
-                let _ = child.kill().await;
-            }
-        }
-    }
-}
+// Note: cleanup_all_processes function removed as global process tracking was removed
 
 // Helper function to find npm binary path - cross-platform
 fn find_npm_path() -> Option<String> {
@@ -396,22 +365,8 @@ pub fn delete_project(project_name: &str) -> Result<(), String> {
     Ok(())
 }
 
-// Delete a project by index
-pub fn delete_project_by_index(index: usize) -> Result<String, String> {
-    let mut projects = load_projects();
-    
-    if index >= projects.len() {
-        return Err(format!("Invalid project index: {}", index));
-    }
-    
-    let deleted_project = projects.remove(index);
-    
-    // Save the updated projects list
-    save_projects(&projects);
-    
-    println!("✅ Deleted project '{}'", deleted_project.name);
-    Ok(deleted_project.name)
-}
+// Note: delete_project_by_index function removed as it's not currently used
+// The UI uses delete_project by name instead
 
 // Package.json parsing functions
 pub fn parse_package_json(project_path: &str) -> Vec<String> {
@@ -727,123 +682,8 @@ pub fn extract_project_name(path: &str) -> String {
     path.to_string()
 }
 
-// Build and update with progress reporting for UI
-pub async fn build_and_update_project_with_progress(
-    project: &Project, 
-    mut progress_signal: dioxus::prelude::Signal<String>
-) -> Result<String, String> {
-    if project.selected_build_commands.is_empty() {
-        return Err("No build commands selected".to_string());
-    }
-    
-    let active_targets: Vec<_> = project.target_paths.iter()
-        .filter(|p| p.is_active)
-        .collect();
-    
-    if active_targets.is_empty() {
-        return Err("No active target paths".to_string());
-    }
-    
-    let project_path = std::path::Path::new(&project.path);
-    let package_json_path = project_path.join("package.json");
-    
-    // Check if package.json exists
-    if !package_json_path.exists() {
-        return Err("package.json not found in project directory".to_string());
-    }
-    
-    let mut results = Vec::new();
-    
-    // Step 1: Execute build commands using bash script
-    results.push(format!("🚀 Executing {} build commands in order...", project.selected_build_commands.len()));
-    progress_signal.set("Creating build script...".to_string());
-    
-    // Create and execute bash script with all commands
-    match create_build_script(&project.selected_build_commands, &project.path) {
-        Ok(script_path) => {
-            progress_signal.set("Executing build commands...".to_string());
-            
-            // Execute the bash script
-            let output = tokio::process::Command::new("bash")
-                .arg(&script_path)
-                .current_dir(&project.path)
-                .output()
-                .await;
-            
-            // Clean up script file
-            let _ = std::fs::remove_file(&script_path);
-            
-            match output {
-                Ok(output) => {
-                    if output.status.success() {
-                        let stdout = String::from_utf8_lossy(&output.stdout);
-                        results.push(format!("✅ All build commands completed successfully\n{}", stdout));
-                    } else {
-                        let stderr = String::from_utf8_lossy(&output.stderr);
-                        return Err(format!("❌ Build script failed: {}", stderr));
-                    }
-                }
-                Err(e) => {
-                    return Err(format!("❌ Failed to execute build script: {}", e));
-                }
-            }
-        }
-        Err(e) => {
-            return Err(format!("❌ Failed to create build script: {}", e));
-        }
-    }
-    
-    results.push("\n📦 Build commands completed successfully!".to_string());
-    
-    // Step 2: Check if dist directory exists after build
-    progress_signal.set("Verifying build output...".to_string());
-    let dist_path = project_path.join("dist");
-    if !dist_path.exists() {
-        return Err("dist directory not found after build. Build commands may have failed.".to_string());
-    }
-    
-    results.push("\n📤 Updating target paths...".to_string());
-    
-    // Process each active target
-    for (index, target) in active_targets.iter().enumerate() {
-        progress_signal.set(format!("Updating target {} of {}: {}", index + 1, active_targets.len(), extract_project_name(&target.path)));
-        
-        let target_path = std::path::Path::new(&target.path);
-        
-        // Get current version from target's package.json
-        let current_version = get_package_version(&target.path)
-            .unwrap_or_else(|| "0.0.0".to_string());
-        
-        // Increment patch version
-        let new_version = increment_patch_version(&current_version);
-        
-        // Copy dist directory
-        let target_dist = target_path.join("dist");
-        if let Err(e) = copy_directory(&dist_path, &target_dist) {
-            results.push(format!("❌ Failed to copy dist to {}: {}", target.path, e));
-            continue;
-        }
-        
-        // Copy package.json
-        let target_package_json = target_path.join("package.json");
-        if let Err(e) = std::fs::copy(&package_json_path, &target_package_json) {
-            results.push(format!("❌ Failed to copy package.json to {}: {}", target.path, e));
-            continue;
-        }
-        
-        // Update version in target's package.json
-        if let Err(e) = update_package_version(&target.path, &new_version) {
-            results.push(format!("❌ Failed to update version in {}: {}", target.path, e));
-            continue;
-        }
-        
-        results.push(format!("✅ Updated {} (v{} → v{})", target.path, current_version, new_version));
-    }
-    
-    progress_signal.set("Finalizing...".to_string());
-    
-    Ok(results.join("\n"))
-}
+// Note: build_and_update_project_with_progress function removed as it's not currently used
+// The UI uses build_and_update_project_cancellable instead
 
 // Build with cancellation support and PID tracking
 pub async fn build_and_update_project_cancellable(
@@ -902,6 +742,7 @@ pub async fn build_and_update_project_cancellable(
             // Set process group for better process tree management
             #[cfg(unix)]
             {
+                #[allow(unused_imports)]
                 use std::os::unix::process::CommandExt;
                 cmd.process_group(0);
             }
