@@ -65,7 +65,14 @@ pub fn Home() -> Element {
                     // Projects Grid
                     div { class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6",
                         for project in projects().iter() {
-                            ProjectCard { project: project.clone() }
+                            ProjectCard { 
+                                project: project.clone(),
+                                on_delete: move |deleted_name: String| {
+                                    // Reload projects after deletion
+                                    let updated_projects = load_projects();
+                                    projects.set(updated_projects);
+                                }
+                            }
                         }
                     }
                 }

@@ -377,6 +377,42 @@ pub fn save_projects(projects: &[Project]) {
     }
 }
 
+// Delete a project by name
+pub fn delete_project(project_name: &str) -> Result<(), String> {
+    let mut projects = load_projects();
+    let initial_count = projects.len();
+    
+    // Remove the project with the matching name
+    projects.retain(|p| p.name != project_name);
+    
+    if projects.len() == initial_count {
+        return Err(format!("Project '{}' not found", project_name));
+    }
+    
+    // Save the updated projects list
+    save_projects(&projects);
+    
+    println!("✅ Deleted project '{}'", project_name);
+    Ok(())
+}
+
+// Delete a project by index
+pub fn delete_project_by_index(index: usize) -> Result<String, String> {
+    let mut projects = load_projects();
+    
+    if index >= projects.len() {
+        return Err(format!("Invalid project index: {}", index));
+    }
+    
+    let deleted_project = projects.remove(index);
+    
+    // Save the updated projects list
+    save_projects(&projects);
+    
+    println!("✅ Deleted project '{}'", deleted_project.name);
+    Ok(deleted_project.name)
+}
+
 // Package.json parsing functions
 pub fn parse_package_json(project_path: &str) -> Vec<String> {
     let mut package_path = std::path::PathBuf::from(project_path);
