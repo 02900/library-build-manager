@@ -25,15 +25,15 @@ pub fn Home() -> Element {
                         }
                     }
                     div { class: "flex space-x-3",
-                        Link {
-                            to: Route::Settings {},
-                            class: "bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors",
-                            span { "⚙️ Settings" }
-                        }
                         button {
                             class: "bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors",
                             onclick: move |_| show_add_modal.set(true),
                             span { "+ Add Project" }
+                        }
+                        Link {
+                            to: Route::Settings {},
+                            class: "bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors",
+                            span { "⚙️ Settings" }
                         }
                     }
                 }

@@ -2,34 +2,6 @@ use dioxus::prelude::*;
 use crate::types::TargetPath;
 use crate::logic::*;
 
-/// Extract project name from target path
-/// For paths like "/Users/random/Documents/project/node_modules/@package/name"
-/// Returns "project"
-/// For nested node_modules like "/project/node_modules/pkg/node_modules/@nested/lib"
-/// Returns "pkg" (parent of the LAST node_modules)
-fn extract_project_name(path: &str) -> String {
-    let path_parts: Vec<&str> = path.split('/').collect();
-    
-    // Find the index of the LAST "node_modules" in the path
-    if let Some(node_modules_index) = path_parts.iter().rposition(|&part| part == "node_modules") {
-        // The project name should be the directory before the last "node_modules"
-        if node_modules_index > 0 {
-            return path_parts[node_modules_index - 1].to_string();
-        }
-    }
-    
-    // Fallback: try to get the last meaningful directory name
-    // Skip empty parts and common endings
-    for part in path_parts.iter().rev() {
-        if !part.is_empty() && *part != "node_modules" && !part.starts_with('@') {
-            return part.to_string();
-        }
-    }
-    
-    // Final fallback: return the full path
-    path.to_string()
-}
-
 /// Project Detail page
 #[component]
 pub fn ProjectDetail(id: String) -> Element {
@@ -45,6 +17,8 @@ pub fn ProjectDetail(id: String) -> Element {
             let mut result_message = use_signal(|| String::new());
             let mut is_success = use_signal(|| true);
             let mut show_commands_accordion = use_signal(|| false);
+            let mut is_building = use_signal(|| false);
+            let mut current_command = use_signal(|| String::new());
             
             let commands = parse_package_json(&current_project().path);
 
@@ -240,34 +214,6 @@ pub fn ProjectDetail(id: String) -> Element {
                                         }
                                     }
                                 }
-                                // Build button inside accordion
-                                if !current_project().selected_build_commands.is_empty() {
-                                    div { class: "mt-6 pt-4 border-t",
-                                        button {
-                                            class: "w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition-colors",
-                                            onclick: {
-                                                let project = current_project();
-                                                move |_| {
-                                                    let project_clone = project.clone();
-                                                    spawn(async move {
-                                                        match build_and_update_project(&project_clone) {
-                                                            Ok(output) => {
-                                                                result_message.set(format!("Build successful!\n\n{}", output));
-                                                                is_success.set(true);
-                                                            }
-                                                            Err(e) => {
-                                                                result_message.set(format!("Build failed: {}", e));
-                                                                is_success.set(false);
-                                                            }
-                                                        }
-                                                        show_result_modal.set(true);
-                                                    });
-                                                }
-                                            },
-                                            "🔨 Build Project"
-                                        }
-                                    }
-                                }
                             }
                             // Show message when accordion is closed but commands are selected
                             if !show_commands_accordion() && !current_project().selected_build_commands.is_empty() {
@@ -368,15 +314,25 @@ pub fn ProjectDetail(id: String) -> Element {
                                 {
                                     div { class: "mt-6 pt-4 border-t",
                                         button {
-                                            class: "w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors",
+                                            class: if is_building() {
+                                                "w-full bg-blue-500 text-white py-2 px-4 rounded-lg cursor-not-allowed opacity-75"
+                                            } else {
+                                                "w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors"
+                                            },
+                                            disabled: is_building(),
                                             onclick: {
                                                 let project = current_project();
                                                 move |_| {
+                                                    if is_building() { return; }
+                                                    
                                                     let project_clone = project.clone();
+                                                    is_building.set(true);
+                                                    current_command.set("Starting build...".to_string());
+                                                    
                                                     spawn(async move {
-                                                        match build_and_update_project(&project_clone) {
-                                                            Ok(output) => {
-                                                                result_message.set(format!("Update successful!\n\n{}", output));
+                                                        match build_and_update_project_with_progress(&project_clone, current_command.clone()).await {
+                                                            Ok(_) => {
+                                                                result_message.set("✅ Build and update completed successfully!\n\nAll selected commands were executed and target paths were updated with the new version.".to_string());
                                                                 is_success.set(true);
                                                             }
                                                             Err(e) => {
@@ -384,11 +340,34 @@ pub fn ProjectDetail(id: String) -> Element {
                                                                 is_success.set(false);
                                                             }
                                                         }
+                                                        is_building.set(false);
+                                                        current_command.set(String::new());
                                                         show_result_modal.set(true);
                                                     });
                                                 }
                                             },
-                                            "🚀 Build & Update Targets"
+                                            // Button content with spinner and dynamic text
+                                            if is_building() {
+                                                div { class: "flex items-center justify-center space-x-2",
+                                                    // Spinning icon
+                                                    svg {
+                                                        class: "animate-spin h-4 w-4",
+                                                        xmlns: "http://www.w3.org/2000/svg",
+                                                        fill: "none",
+                                                        "viewBox": "0 0 24 24",
+                                                        stroke: "currentColor",
+                                                        path {
+                                                            "stroke-linecap": "round",
+                                                            "stroke-linejoin": "round",
+                                                            "stroke-width": "2",
+                                                            d: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                                                        }
+                                                    }
+                                                    span { "{current_command()}" }
+                                                }
+                                            } else {
+                                                "🚀 Build & Update Targets"
+                                            }
                                         }
                                     }
                                 }

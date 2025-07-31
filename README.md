@@ -68,7 +68,7 @@ A **cross-platform** desktop application built with Dioxus 0.7 for managing buil
   - ⚠️ Yellow: CLI not in PATH
   - ❌ Red: Verification error
 
-### 4. Update Logic (based on update-pkg.sh)
+### 4. Update Logic
 When "Build & Update" is executed:
 1. Verifies that `dist` directory exists in the project
 2. For each active target path:

@@ -77,7 +77,8 @@ fn main() {
                     if list {
                         list_projects_cli();
                     } else {
-                        build_project_cli(&project);
+                        let rt = tokio::runtime::Runtime::new().unwrap();
+                        rt.block_on(build_project_cli(&project));
                     }
                 }
                 Some(Commands::List) => {
@@ -157,7 +158,7 @@ fn list_projects_cli() {
     }
 }
 
-fn build_project_cli(project_identifier: &str) {
+async fn build_project_cli(project_identifier: &str) {
     let projects = load_projects();
     
     // Find project by name or ID
@@ -193,7 +194,7 @@ fn build_project_cli(project_identifier: &str) {
             println!();
             
             // Execute the build and update
-            match build_and_update_project(project) {
+            match build_and_update_project(project).await {
                 Ok(output) => {
                     println!("✅ Build and update completed successfully!");
                     println!();

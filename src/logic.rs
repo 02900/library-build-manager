@@ -1,5 +1,85 @@
-use crate::types::Project;
-use serde_json;
+use crate::types::*;
+use serde_json::{self, Value};
+use std::fs;
+use std::path::Path;
+use dioxus::prelude::Writable;
+
+// Helper function to find npm binary path
+fn find_npm_path() -> Option<String> {
+    // Common npm locations on macOS
+    let possible_paths = [
+        "/usr/local/bin/npm",
+        "/opt/homebrew/bin/npm",
+        "/usr/bin/npm",
+    ];
+    
+    for path in &possible_paths {
+        if std::path::Path::new(path).exists() {
+            return Some(path.to_string());
+        }
+    }
+    
+    // Try to find npm using which command
+    if let Ok(output) = std::process::Command::new("which")
+        .arg("npm")
+        .output() {
+        if output.status.success() {
+            if let Ok(path) = String::from_utf8(output.stdout) {
+                let trimmed_path = path.trim();
+                if !trimmed_path.is_empty() {
+                    return Some(trimmed_path.to_string());
+                }
+            }
+        }
+    }
+    
+    None
+}
+
+// Helper function to create and execute a bash script with npm commands
+fn create_build_script(commands: &[String], project_path: &str) -> Result<String, String> {
+    use std::io::Write;
+    
+    // Find npm binary path
+    let npm_path = find_npm_path().unwrap_or_else(|| "npm".to_string());
+    
+    // Create temporary script file
+    let script_path = format!("{}/build_script.sh", project_path);
+    
+    // Generate script content with full npm path and proper PATH setup
+    let mut script_content = String::from("#!/bin/bash\nset -e\n\n");
+    
+    // Add common Node.js paths to PATH
+    script_content.push_str("export PATH=\"/usr/local/bin:/opt/homebrew/bin:/usr/bin:$PATH\"\n\n");
+    
+    for command in commands {
+        script_content.push_str(&format!("echo 'Running: {} run {}'\n", npm_path, command));
+        script_content.push_str(&format!("{} run {}\n", npm_path, command));
+    }
+    
+    // Write script to file
+    match std::fs::File::create(&script_path) {
+        Ok(mut file) => {
+            if let Err(e) = file.write_all(script_content.as_bytes()) {
+                return Err(format!("Failed to write script: {}", e));
+            }
+        }
+        Err(e) => {
+            return Err(format!("Failed to create script file: {}", e));
+        }
+    }
+    
+    // Make script executable
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Err(e) = std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755)) {
+            return Err(format!("Failed to set script permissions: {}", e));
+        }
+    }
+    
+    Ok(script_path)
+}
 
 // Data persistence functions
 pub fn get_data_dir() -> std::path::PathBuf {
@@ -257,7 +337,7 @@ pub async fn open_target_folder_dialog() -> Option<String> {
 }
 
 // Main build and update logic
-pub fn build_and_update_project(project: &Project) -> Result<String, String> {
+pub async fn build_and_update_project(project: &Project) -> Result<String, String> {
     if project.selected_build_commands.is_empty() {
         return Err("No build commands selected".to_string());
     }
@@ -271,13 +351,7 @@ pub fn build_and_update_project(project: &Project) -> Result<String, String> {
     }
     
     let project_path = std::path::Path::new(&project.path);
-    let dist_path = project_path.join("dist");
     let package_json_path = project_path.join("package.json");
-    
-    // Check if dist directory exists
-    if !dist_path.exists() {
-        return Err("dist directory not found. Please build the project first.".to_string());
-    }
     
     // Check if package.json exists
     if !package_json_path.exists() {
@@ -285,6 +359,52 @@ pub fn build_and_update_project(project: &Project) -> Result<String, String> {
     }
     
     let mut results = Vec::new();
+    
+    // Step 1: Execute build commands using bash script
+    results.push(format!("🚀 Executing {} build commands in order...", project.selected_build_commands.len()));
+    
+    // Create and execute bash script with all commands
+    match create_build_script(&project.selected_build_commands, &project.path) {
+        Ok(script_path) => {
+            // Execute the bash script
+            let output = tokio::process::Command::new("bash")
+                .arg(&script_path)
+                .current_dir(&project.path)
+                .output()
+                .await;
+            
+            // Clean up script file
+            let _ = std::fs::remove_file(&script_path);
+            
+            match output {
+                Ok(output) => {
+                    if output.status.success() {
+                        let stdout = String::from_utf8_lossy(&output.stdout);
+                        results.push(format!("✅ All build commands completed successfully\n{}", stdout));
+                    } else {
+                        let stderr = String::from_utf8_lossy(&output.stderr);
+                        return Err(format!("❌ Build script failed: {}", stderr));
+                    }
+                }
+                Err(e) => {
+                    return Err(format!("❌ Failed to execute build script: {}", e));
+                }
+            }
+        }
+        Err(e) => {
+            return Err(format!("❌ Failed to create build script: {}", e));
+        }
+    }
+    
+    results.push("\n📦 Build commands completed successfully!".to_string());
+    
+    // Step 2: Check if dist directory exists after build
+    let dist_path = project_path.join("dist");
+    if !dist_path.exists() {
+        return Err("dist directory not found after build. Build commands may have failed.".to_string());
+    }
+    
+    results.push("\n📤 Updating target paths...".to_string());
     
     // Process each active target
     for target in active_targets {
@@ -319,6 +439,152 @@ pub fn build_and_update_project(project: &Project) -> Result<String, String> {
         
         results.push(format!("✅ Updated {} (v{} → v{})", target.path, current_version, new_version));
     }
+    
+    Ok(results.join("\n"))
+}
+
+/// Extract project name from target path
+/// For paths like "/Users/random/Documents/project/node_modules/@package/name"
+/// Returns "project"
+/// For nested node_modules like "/project/node_modules/pkg/node_modules/@nested/lib"
+/// Returns "pkg" (parent of the LAST node_modules)
+pub fn extract_project_name(path: &str) -> String {
+    let path_parts: Vec<&str> = path.split('/').collect();
+    
+    // Find the last occurrence of "node_modules"
+    if let Some(node_modules_index) = path_parts.iter().rposition(|&part| part == "node_modules") {
+        // The project name should be the directory before the last "node_modules"
+        if node_modules_index > 0 {
+            return path_parts[node_modules_index - 1].to_string();
+        }
+    }
+    
+    // Fallback: try to get the last meaningful directory name
+    // Skip empty parts and common endings
+    for part in path_parts.iter().rev() {
+        if !part.is_empty() && *part != "node_modules" && !part.starts_with('@') {
+            return part.to_string();
+        }
+    }
+    
+    // Final fallback: return the full path
+    path.to_string()
+}
+
+// Build and update with progress reporting for UI
+pub async fn build_and_update_project_with_progress(
+    project: &Project, 
+    mut progress_signal: dioxus::prelude::Signal<String>
+) -> Result<String, String> {
+    if project.selected_build_commands.is_empty() {
+        return Err("No build commands selected".to_string());
+    }
+    
+    let active_targets: Vec<_> = project.target_paths.iter()
+        .filter(|p| p.is_active)
+        .collect();
+    
+    if active_targets.is_empty() {
+        return Err("No active target paths".to_string());
+    }
+    
+    let project_path = std::path::Path::new(&project.path);
+    let package_json_path = project_path.join("package.json");
+    
+    // Check if package.json exists
+    if !package_json_path.exists() {
+        return Err("package.json not found in project directory".to_string());
+    }
+    
+    let mut results = Vec::new();
+    
+    // Step 1: Execute build commands using bash script
+    results.push(format!("🚀 Executing {} build commands in order...", project.selected_build_commands.len()));
+    progress_signal.set("Creating build script...".to_string());
+    
+    // Create and execute bash script with all commands
+    match create_build_script(&project.selected_build_commands, &project.path) {
+        Ok(script_path) => {
+            progress_signal.set("Executing build commands...".to_string());
+            
+            // Execute the bash script
+            let output = tokio::process::Command::new("bash")
+                .arg(&script_path)
+                .current_dir(&project.path)
+                .output()
+                .await;
+            
+            // Clean up script file
+            let _ = std::fs::remove_file(&script_path);
+            
+            match output {
+                Ok(output) => {
+                    if output.status.success() {
+                        let stdout = String::from_utf8_lossy(&output.stdout);
+                        results.push(format!("✅ All build commands completed successfully\n{}", stdout));
+                    } else {
+                        let stderr = String::from_utf8_lossy(&output.stderr);
+                        return Err(format!("❌ Build script failed: {}", stderr));
+                    }
+                }
+                Err(e) => {
+                    return Err(format!("❌ Failed to execute build script: {}", e));
+                }
+            }
+        }
+        Err(e) => {
+            return Err(format!("❌ Failed to create build script: {}", e));
+        }
+    }
+    
+    results.push("\n📦 Build commands completed successfully!".to_string());
+    
+    // Step 2: Check if dist directory exists after build
+    progress_signal.set("Verifying build output...".to_string());
+    let dist_path = project_path.join("dist");
+    if !dist_path.exists() {
+        return Err("dist directory not found after build. Build commands may have failed.".to_string());
+    }
+    
+    results.push("\n📤 Updating target paths...".to_string());
+    
+    // Process each active target
+    for (index, target) in active_targets.iter().enumerate() {
+        progress_signal.set(format!("Updating target {} of {}: {}", index + 1, active_targets.len(), extract_project_name(&target.path)));
+        
+        let target_path = std::path::Path::new(&target.path);
+        
+        // Get current version from target's package.json
+        let current_version = get_package_version(&target.path)
+            .unwrap_or_else(|| "0.0.0".to_string());
+        
+        // Increment patch version
+        let new_version = increment_patch_version(&current_version);
+        
+        // Copy dist directory
+        let target_dist = target_path.join("dist");
+        if let Err(e) = copy_directory(&dist_path, &target_dist) {
+            results.push(format!("❌ Failed to copy dist to {}: {}", target.path, e));
+            continue;
+        }
+        
+        // Copy package.json
+        let target_package_json = target_path.join("package.json");
+        if let Err(e) = std::fs::copy(&package_json_path, &target_package_json) {
+            results.push(format!("❌ Failed to copy package.json to {}: {}", target.path, e));
+            continue;
+        }
+        
+        // Update version in target's package.json
+        if let Err(e) = update_package_version(&target.path, &new_version) {
+            results.push(format!("❌ Failed to update version in {}: {}", target.path, e));
+            continue;
+        }
+        
+        results.push(format!("✅ Updated {} (v{} → v{})", target.path, current_version, new_version));
+    }
+    
+    progress_signal.set("Finalizing...".to_string());
     
     Ok(results.join("\n"))
 }
